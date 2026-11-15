@@ -1,18 +1,29 @@
-// Reads a ChatGPT or Claude data export (the ZIP as downloaded, or the
-// conversations.json inside it) and saves the conversations locally.
+// Reads a ChatGPT, Claude or Gemini data export (the ZIP as downloaded, or the
+// JSON file inside it) and saves the conversations locally.
 
 import fs from 'node:fs'
 import yauzl from 'yauzl'
 import type { ImportResult, Provider } from '@shared/types'
-import { parseExport } from './importers'
+import { detectExport, parseExport } from './importers'
 import type { Store } from './store'
 
 const CONVERSATIONS_FILE = /(^|\/)conversations(-\d+)?\.json$/i
-/** Google Takeout: Takeout/My Activity/Gemini Apps/MyActivity.json */
-const GEMINI_ACTIVITY_FILE = /(^|\/)Gemini[^/]*\/My ?Activity\.json$/i
+/**
+ * Google Takeout puts the activity at "Takeout/My Activity/Gemini Apps/MyActivity.json".
+ * Folder and file names are translated in other languages, so only the product name is relied on.
+ */
+const GEMINI_ACTIVITY_FILE = /(^|\/)[^/]*(gemini|bard)[^/]*\/[^/]+\.json$/i
+const GEMINI_ACTIVITY_HTML = /(^|\/)[^/]*(gemini|bard)[^/]*\/[^/]+\.html?$/i
+const ANY_JSON = /\.json$/i
 const MAX_JSON_BYTES = 1_500_000_000
 
-function readZipEntries(file: string, wanted: RegExp): Promise<string[]> {
+interface ZipRead {
+  contents: string[]
+  /** Every file name in the archive, to explain what was found when nothing matched. */
+  names: string[]
+}
+
+function readZipEntries(file: string, wanted: RegExp): Promise<ZipRead> {
   return new Promise((resolve, reject) => {
     yauzl.open(file, { lazyEntries: true }, (openError, zip) => {
       if (openError || !zip) {
@@ -20,9 +31,11 @@ function readZipEntries(file: string, wanted: RegExp): Promise<string[]> {
         return
       }
       const contents: string[] = []
+      const names: string[] = []
       zip.on('error', reject)
-      zip.on('end', () => resolve(contents))
+      zip.on('end', () => resolve({ contents, names }))
       zip.on('entry', (entry: yauzl.Entry) => {
+        names.push(entry.fileName)
         if (!wanted.test(entry.fileName) || entry.uncompressedSize > MAX_JSON_BYTES) {
           zip.readEntry()
           return
@@ -46,25 +59,54 @@ function readZipEntries(file: string, wanted: RegExp): Promise<string[]> {
   })
 }
 
-async function readExport(provider: Provider, file: string): Promise<unknown[]> {
-  const wanted = provider === 'gemini' ? GEMINI_ACTIVITY_FILE : CONVERSATIONS_FILE
-  const texts = /\.zip$/i.test(file) ? await readZipEntries(file, wanted) : [await fs.promises.readFile(file, 'utf8')]
-  if (texts.length === 0) {
-    throw new Error(
-      provider === 'gemini'
-        ? 'No Gemini activity file was found in that ZIP. In Google Takeout choose My Activity, keep only Gemini Apps, and set the format to JSON.'
-        : 'No conversations.json was found in that ZIP file.',
-    )
-  }
+function parseAll(texts: string[]): unknown[] {
   const all: unknown[] = []
   for (const text of texts) {
-    const parsed: unknown = JSON.parse(text)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      continue
+    }
     if (Array.isArray(parsed)) all.push(...parsed)
     else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { conversations?: unknown }).conversations)) {
       all.push(...(parsed as { conversations: unknown[] }).conversations)
     }
   }
   return all
+}
+
+async function readGeminiZip(file: string): Promise<unknown[]> {
+  const first = await readZipEntries(file, GEMINI_ACTIVITY_FILE)
+  if (first.contents.length > 0) return parseAll(first.contents)
+  // The usual path was not there. If the activity came as HTML, say exactly what to change.
+  if (first.names.some((name) => GEMINI_ACTIVITY_HTML.test(name))) {
+    throw new Error(
+      'This Takeout archive holds your Gemini activity as HTML, which cannot be imported. Request the export again and, under My Activity, set "Activity records" to JSON.',
+    )
+  }
+  // Last resort: look inside every JSON file for Gemini activity records.
+  const every = await readZipEntries(file, ANY_JSON)
+  const records = every.contents
+    .map((text) => parseAll([text]))
+    .filter((list) => detectExport(list) === 'gemini')
+    .flat()
+  if (records.length > 0) return records
+  throw new Error(
+    'No Gemini activity was found in that ZIP. In Google Takeout tick My Activity, keep only Gemini Apps inside it, and set "Activity records" to JSON. (The separate "Gemini" entry in Takeout holds Gems, not chats.)',
+  )
+}
+
+async function readExport(provider: Provider, file: string): Promise<unknown[]> {
+  if (!/\.zip$/i.test(file)) return parseAll([await fs.promises.readFile(file, 'utf8')])
+  if (provider === 'gemini') return readGeminiZip(file)
+  const { contents } = await readZipEntries(file, CONVERSATIONS_FILE)
+  if (contents.length === 0) {
+    throw new Error(
+      `No conversations.json was found in that ZIP file. Use the ZIP that ${provider === 'claude' ? 'Claude' : 'ChatGPT'} emailed you, unchanged.`,
+    )
+  }
+  return parseAll(contents)
 }
 
 export async function importExport(store: Store, provider: Provider, file: string): Promise<ImportResult> {

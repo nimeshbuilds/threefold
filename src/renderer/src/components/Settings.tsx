@@ -20,7 +20,7 @@ const LINKS: Record<Provider, { billing: string; keys: string; credits: string; 
     billing: 'https://claude.ai/settings/billing',
     keys: 'https://platform.claude.com/settings/keys',
     credits: 'https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans',
-    export: 'https://claude.ai/settings/data-privacy-controls',
+    export: 'https://claude.ai/settings',
   },
   chatgpt: {
     billing: 'https://chatgpt.com/',
@@ -345,23 +345,56 @@ export function ImportBlock({ provider }: { provider: Provider }) {
         <h3>{MODE_NAME[provider]} history</h3>
       </div>
       <ol className="steps">
-        {provider === 'gemini' ? (
-          <li>
-            Open <Link href={links.export}>Google Takeout</Link>, choose <em>Deselect all</em>, tick <em>My Activity</em>,
-            keep only <em>Gemini Apps</em> inside it, and set its format to <em>JSON</em>. Google emails you a download
-            link.
-          </li>
-        ) : (
-          <li>
-            In{' '}
-            <Link href={links.export}>
-              {MODE_NAME[provider]} → Settings → {provider === 'claude' ? 'Privacy' : 'Data controls'}
-            </Link>
-            , choose <em>Export data</em>. {MODE_NAME[provider]} emails you a download link, usually within minutes.
-          </li>
+        {provider === 'claude' && (
+          <>
+            <li>
+              On <Link href={links.export}>claude.ai</Link> or in the Claude desktop app (not the phone app), open{' '}
+              <strong>Settings → Privacy</strong> and click <strong>Export data</strong>.
+            </li>
+            <li>
+              Claude emails a download link to your account's address. Open it while signed in; it expires after 24
+              hours.
+            </li>
+          </>
+        )}
+        {provider === 'chatgpt' && (
+          <>
+            <li>
+              In <Link href={links.export}>ChatGPT</Link>, open your profile menu, then{' '}
+              <strong>Settings → Data controls</strong>. Next to <strong>Export data</strong> click <strong>Export</strong>,
+              then <strong>Confirm export</strong>.
+            </li>
+            <li>
+              ChatGPT emails (or texts) you when the export is ready. That is often quick but can take days. Download it
+              while signed in to the same account; the link expires after 24 hours.
+            </li>
+          </>
+        )}
+        {provider === 'gemini' && (
+          <>
+            <li>
+              Open <Link href={links.export}>Google Takeout</Link> and click <strong>Deselect all</strong>. Scroll to{' '}
+              <strong>My Activity</strong> and tick it. (Not the separate <em>Gemini</em> entry: that one holds your Gems,
+              not your chats.)
+            </li>
+            <li>
+              Under My Activity click <strong>All activity data included</strong>, choose <strong>Deselect all</strong>,
+              tick only <strong>Gemini Apps</strong> and confirm.
+            </li>
+            <li>
+              Still under My Activity click <strong>Multiple formats</strong> and set <strong>Activity records</strong> to{' '}
+              <strong>JSON</strong>. This matters: the default is HTML, which Threefold cannot read.
+            </li>
+            <li>
+              Click <strong>Next step</strong>, then <strong>Create export</strong>. Google emails you a download link.
+            </li>
+          </>
         )}
         <li>Download the ZIP file. You do not need to unzip it.</li>
-        <li>Choose the ZIP here. Imported chats appear in the sidebar and can be continued through the API.</li>
+        <li>
+          Click the button below and choose that ZIP. The chats appear in the {MODE_NAME[provider]} mode sidebar and can be
+          continued through the API.
+        </li>
       </ol>
       <div className="key-row">
         <button
@@ -393,9 +426,12 @@ export function ImportBlock({ provider }: { provider: Provider }) {
       )}
       <p className="muted small">
         The export is a snapshot. Chats you continue in Threefold do not sync back to {MODE_NAME[provider]}, and pictures
-        and uploaded files are not part of the export.
+        and uploaded files are not part of the export. Importing the same export again adds only what is new.
+        {provider === 'claude' &&
+          ' On a Team or Enterprise plan, export works only if an owner has allowed members to export their data.'}
+        {provider === 'chatgpt' && ' Business and Enterprise workspaces do not offer this export.'}
         {provider === 'gemini' &&
-          ' Google exports an activity log, not conversations, so prompts made within half an hour of each other are grouped into one chat. Only activity that was being saved is included.'}
+          ' Google exports an activity log, not conversations, so prompts made within half an hour of each other are grouped into one chat. Only activity that Gemini was saving (Gemini Apps Activity switched on) is included, and work or school accounts may not allow the export.'}
       </p>
     </div>
   )

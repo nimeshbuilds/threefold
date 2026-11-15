@@ -261,6 +261,28 @@ export function htmlToMarkdown(html: string): string {
     .trim()
 }
 
+/** The reply stored with an activity record. Google's field for it has varied, so several are tried. */
+function geminiReply(record: Record<string, unknown>): string {
+  const items = Array.isArray(record.safeHtmlItem) ? record.safeHtmlItem : []
+  const fromHtml = items
+    .map((item) => (isRecord(item) && typeof item.html === 'string' ? htmlToMarkdown(item.html) : ''))
+    .filter(Boolean)
+    .join('\n\n')
+  if (fromHtml) return fromHtml
+  const subtitles = Array.isArray(record.subtitles) ? record.subtitles : []
+  const fromSubtitles = subtitles
+    .map((item) => (isRecord(item) && typeof item.name === 'string' ? item.name : typeof item === 'string' ? item : ''))
+    .filter(Boolean)
+    .join('\n\n')
+  if (fromSubtitles) return fromSubtitles
+  return typeof record.description === 'string' ? record.description.trim() : ''
+}
+
+function isGeminiRecord(record: Record<string, unknown>): boolean {
+  const products = Array.isArray(record.products) ? record.products.join(' ') : ''
+  return /gemini|bard/i.test(`${typeof record.header === 'string' ? record.header : ''} ${products}`)
+}
+
 const PROMPT_PREFIX = /^(Prompted|Asked|Said)\s+/i
 /** Prompts this far apart are treated as separate chats. */
 const GEMINI_GAP_MS = 30 * 60_000
@@ -280,14 +302,12 @@ export function parseGeminiActivity(data: unknown): ParsedExport {
   for (const record of data) {
     result.found += 1
     if (!isRecord(record) || typeof record.title !== 'string') continue
-    if (!PROMPT_PREFIX.test(record.title)) continue
-    const prompt = record.title.replace(PROMPT_PREFIX, '').trim()
+    const reply = geminiReply(record)
+    const known = PROMPT_PREFIX.test(record.title)
+    // Exports in other languages word the title differently. A Gemini record that carries a reply is still a prompt.
+    if (!known && !(reply && isGeminiRecord(record))) continue
+    const prompt = (known ? record.title.replace(PROMPT_PREFIX, '') : record.title).trim()
     const time = toMs(record.time)
-    const items = Array.isArray(record.safeHtmlItem) ? record.safeHtmlItem : []
-    const reply = items
-      .map((item) => (isRecord(item) && typeof item.html === 'string' ? htmlToMarkdown(item.html) : ''))
-      .filter(Boolean)
-      .join('\n\n')
     if (!prompt || !time) continue
     exchanges.push({ time, prompt, reply })
   }
