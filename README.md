@@ -157,7 +157,7 @@ pnpm test:e2e
 **Tested automatically, with no API key:**
 
 - 88 unit tests: price maths including announced price changes, the three export parsers, storage and the spend ledger, file-tool path confinement, the cost meter, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up).
-- 53 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
+- 56 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
 
 **Not yet run against the real APIs.** The provider code is written against the official SDK type definitions and documentation and compiles against them, but no request with a real key has been made from this repository. A live suite is ready for that:
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { ImportResult, Memory, Provider, SpendSummary } from '@shared/types'
 import { MODELS, PRICING_AS_OF, currentRates, formatTokens, formatUsd, modelLabel } from '@shared/pricing'
-import { API_NAME, MODE_NAME, daysUntil, shortDate } from '../lib/format'
+import nimeshbuildsLogo from '../assets/nimeshbuilds.png'
+import { API_NAME, MODE_NAME, ORG_URL, daysUntil, shortDate } from '../lib/format'
 import { useApp, type SettingsTab } from '../state'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
@@ -541,6 +542,17 @@ export function SettingsModal() {
                 Google. “Claude”, “ChatGPT” and “Gemini” are trademarks of their owners and are used here only to say
                 which API a mode connects to.
               </p>
+              <div className="built-by-card">
+                <img src={nimeshbuildsLogo} width={40} height={40} alt="NimeshBuilds logo" />
+                <div>
+                  <strong>Built in public by Nimesh</strong>
+                  <p>
+                    Threefold is built by Nimesh under NimeshBuilds, a build-in-public organisation on GitHub where the
+                    work is shared as it happens. Check out the GitHub org:{' '}
+                    <Link href={ORG_URL}>github.com/nimeshbuilds</Link>
+                  </p>
+                </div>
+              </div>
               <h3>Prices used for the meter</h3>
               <p className="muted small">
                 USD per 1M tokens, from the providers' pricing pages on {PRICING_AS_OF}. Web search adds $0.01 per search

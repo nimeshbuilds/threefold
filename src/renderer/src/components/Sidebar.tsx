@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ConversationMeta, Provider } from '@shared/types'
 import { formatUsd } from '@shared/pricing'
-import { MODE_NAME, daysUntil, groupByRecency } from '../lib/format'
+import nimeshbuildsLogo from '../assets/nimeshbuilds.png'
+import { MODE_NAME, ORG_URL, daysUntil, groupByRecency } from '../lib/format'
 import { connectedProviders, useApp } from '../state'
 import { Icon } from './Icon'
 import { Wordmark } from './Logo'
@@ -288,6 +289,19 @@ export function Sidebar() {
           <span className="avatar">{(name.trim()[0] ?? 'T').toUpperCase()}</span>
           <span className="user-name">{name.trim() || 'Settings'}</span>
           <Icon name="settings" size={16} />
+        </button>
+        <button
+          className="built-by"
+          onClick={() => void api.app.openExternal(ORG_URL)}
+          title="Open the NimeshBuilds organisation on GitHub (github.com/nimeshbuilds)"
+        >
+          <img src={nimeshbuildsLogo} width={22} height={22} alt="" />
+          <span className="built-by-text">
+            <span>Built in public by Nimesh</span>
+            <span className="built-by-org">
+              NimeshBuilds on GitHub <Icon name="external" size={11} />
+            </span>
+          </span>
         </button>
       </div>
     </aside>

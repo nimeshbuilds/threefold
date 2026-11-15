@@ -1,6 +1,9 @@
 import type { ConversationMeta, Provider } from '@shared/types'
 
 export const MODE_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }
+/** NimeshBuilds, the GitHub organisation this app is built under. */
+export const ORG_URL = 'https://github.com/nimeshbuilds'
+
 export const API_NAME: Record<Provider, string> = { claude: 'Anthropic', chatgpt: 'OpenAI', gemini: 'Google' }
 
 export interface ChatGroup {

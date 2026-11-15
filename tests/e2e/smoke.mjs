@@ -56,6 +56,9 @@ try {
   check('greeting uses the name from the wizard', /Sam/.test(greeting ?? ''), greeting ?? '')
   check('starts in Claude mode', (await page.getAttribute('html', 'data-mode')) === 'claude')
   check('meter shows the $200 credit grant', /\$200/.test((await page.textContent('.meter')) ?? ''))
+  const credit = (await page.textContent('.built-by')) ?? ''
+  check('sidebar credits Nimesh and the NimeshBuilds org', /Built in public by Nimesh/.test(credit) && /NimeshBuilds on GitHub/.test(credit), credit)
+  check('NimeshBuilds logo loads', await page.locator('.built-by img').evaluate((img) => img.complete && img.naturalWidth > 0))
   await shot('04-claude-empty')
 
   // ---- send a message and watch the cost move ----
@@ -211,6 +214,9 @@ try {
   await page.click('.modal-nav .side-btn:has-text("API keys")')
   await shot('13-keys')
   await page.click('.modal-nav .side-btn:has-text("About")')
+  const about = (await page.textContent('.modal-body')) ?? ''
+  check('about credits NimeshBuilds with the org link', /built by Nimesh under NimeshBuilds/.test(about) && /github\.com\/nimeshbuilds/.test(about))
+  await shot('13b-about')
   check('about states independence from Anthropic, OpenAI and Google', /not made by, affiliated with or endorsed by Anthropic, OpenAI or\s+Google/.test((await page.textContent('.modal-body')) ?? ''))
   await page.click('.modal-close')
 

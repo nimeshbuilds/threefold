@@ -80,6 +80,10 @@ Threefold uses the fonts already on the Mac and ships none of its own.
 - No hype and no exclamation marks. The app is a tool.
 - Sentence case everywhere: "New chat", "Import history".
 
+## Credit
+
+Threefold is built in public by Nimesh under NimeshBuilds (https://github.com/nimeshbuilds). The app carries a small credit at the bottom of the sidebar and a fuller one in Settings → About, each with the NimeshBuilds mark and a link to the organisation. Keep the credit quiet: muted text, the mark at 22 px or smaller in the sidebar, and no more than one per screen. The NimeshBuilds mark is used as supplied, never recoloured or combined with the Threefold mark.
+
 ## What Threefold must never look like
 
 Threefold is independent. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or Google.
