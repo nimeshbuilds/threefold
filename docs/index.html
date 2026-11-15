@@ -33,8 +33,9 @@
       <a href="#review">Review</a>
       <a href="#research">Research</a>
       <a href="#cost">Cost</a>
+      <a href="#fallback">Fallback</a>
       <a href="#start">Quick start</a>
-      <a href="#import">Import</a>
+      <a href="#handoff">Handoff</a>
       <a href="https://github.com/nimeshbuilds/threefold">GitHub</a>
     </nav>
     <span class="status-pill">Early preview</span>
@@ -62,6 +63,7 @@
           <button role="tab" aria-selected="false" data-shot="gemini-reply" data-alt="Gemini mode: a cool blue-tinted theme with the Gemini spend meter in the sidebar">Gemini mode</button>
           <button role="tab" aria-selected="false" data-shot="threefold-done" data-alt="Threefold review: an answer with its draft, two reviews and final step listed above it, each with its own cost">Threefold review</button>
           <button role="tab" aria-selected="false" data-shot="research" data-alt="Deep research: a message tagged as deep research, answered with a structured report, its sources and its cost">Deep research</button>
+          <button role="tab" aria-selected="false" data-shot="fallback" data-alt="Automatic fallback: a chat that moved from Claude to ChatGPT, with a card at the top saying why, what the handoff summary cost, and the summary itself">Fallback</button>
         </div>
         <figure class="window">
           <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -243,7 +245,34 @@
       </div>
     </section>
 
-    <section id="start" aria-labelledby="start-title">
+    <section id="fallback" aria-labelledby="fallback-title">
+      <h2 id="fallback-title">When one plan runs low, carry on with another</h2>
+      <p class="section-lede">
+        Turn on automatic fallback and Threefold watches each provider's monthly credit. When one is nearly used up,
+        the chat moves to a provider that still has credit, and brings its history along.
+      </p>
+      <div class="split">
+        <div>
+          <ul class="ticks">
+            <li><strong>It switches at 85%.</strong> Once a provider's credit is that far used, your next message goes to another connected provider that has credit to spare. You can change the threshold and say which provider you prefer.</li>
+            <li><strong>The chat comes with you.</strong> The new provider first writes a handoff summary of the conversation so far: the goal, what was decided, where things stand and what comes next. Your message is then answered with that summary as its history.</li>
+            <li><strong>You are told first.</strong> A note above the message box says the next message will move, and one click keeps that chat where it is.</li>
+            <li><strong>Nothing is hidden on the bill.</strong> Writing the summary is one extra request, billed by the provider you move to. Its cost is shown in the chat and counted in the meter.</li>
+          </ul>
+          <p class="note">
+            Off by default, and it needs at least two connected providers with a monthly credit set. A summary carries
+            the gist of a chat, not every word; the original chat stays where it was. You can also hand any chat to
+            another provider yourself, from the top bar.
+          </p>
+        </div>
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/fallback.png" width="1280" height="840" loading="lazy" alt="A chat that moved from Claude to ChatGPT: a card at the top says Claude's credit was nearly used up, names the model that wrote the summary and its cost, and shows the summary">
+        </figure>
+      </div>
+    </section>
+
+    <section id="start" class="band" aria-labelledby="start-title">
       <h2 id="start-title">Quick start</h2>
       <p class="section-lede">
         Two ways to get Threefold onto your Mac: download the ready-made app, or build it yourself from the source.
@@ -254,7 +283,7 @@
         <article class="path">
           <p class="path-tag">Option A</p>
           <h3>Download the app</h3>
-          <p class="path-meta">Version 0.4.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+          <p class="path-meta">Version 0.5.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
 
           <div class="warn" role="note">
             <p><strong>Read this first: the app is not signed by Apple.</strong></p>
@@ -359,7 +388,7 @@
       </p>
     </section>
 
-    <section id="setup" class="band" aria-labelledby="setup-title">
+    <section id="setup" aria-labelledby="setup-title">
       <h2 id="setup-title">Setup is three steps per provider</h2>
       <p class="section-lede">A short wizard walks you through it on first launch. Connect one, two or all three.</p>
       <ol class="setup">
@@ -379,7 +408,7 @@
       <p class="fineprint center">No plan credits? It still works. Usage is then billed to the payment method on your API account.</p>
     </section>
 
-    <section id="import" aria-labelledby="import-title">
+    <section id="import" class="band" aria-labelledby="import-title">
       <h2 id="import-title">Bring your chat history with you</h2>
       <p class="section-lede">
         Ask each company for an export of your data, then hand the ZIP to Threefold. Your old chats appear in that
@@ -438,6 +467,85 @@
       </p>
     </section>
 
+    <section id="handoff" aria-labelledby="handoff-title">
+      <h2 id="handoff-title">Or bring one chat over in a minute, with the threefolds skill</h2>
+      <p class="section-lede">
+        An export takes a while and brings everything. When you only want to carry on with one conversation, ask the
+        assistant you are leaving to write a handoff summary, and paste it into Threefold. No export, no import.
+      </p>
+
+      <ol class="setup handoff-steps">
+        <li>
+          <h3>Add the skill once</h3>
+          <p><code>threefolds</code> is a small skill: one text file of instructions, with no code in it. Add it to the official Claude, ChatGPT or Gemini app. The steps for each are below.</p>
+        </li>
+        <li>
+          <h3>Run it in any chat</h3>
+          <p>Open the conversation you want to move and type <code>/threefolds</code>, or ask for a handoff summary. The assistant writes one: goal, background, what was done, where things stand, what is next.</p>
+        </li>
+        <li>
+          <h3>Paste it into Threefold</h3>
+          <p>Copy that message. In Threefold choose <strong>File → Continue from a Handoff…</strong>, paste, and carry on in whichever mode you like. The summary is sent as background with your next message.</p>
+        </li>
+      </ol>
+
+      <div class="import-grid">
+        <article class="import-card ember">
+          <h3>Claude</h3>
+          <ol class="numbered compact">
+            <li>Download <a href="skills/threefolds.zip" download>threefolds.zip</a>.</li>
+            <li>In Claude, open <strong>Settings → Capabilities</strong> and make sure <strong>Code execution and file creation</strong> is on. Skills need it.</li>
+            <li>Go to <strong>Customize → Skills</strong>, click <strong>+</strong>, then <strong>+ Create skill</strong>, then <strong>Upload a skill</strong>, and choose the ZIP.</li>
+            <li>In any chat, type <code>/threefolds</code> or ask Claude to "use the threefolds skill".</li>
+          </ol>
+          <p class="small">Skills are on every Claude plan, including Free. On Team and Enterprise an owner has to allow them. <a href="https://support.claude.com/en/articles/12512180">Anthropic's guide</a></p>
+        </article>
+
+        <article class="import-card ink">
+          <h3>ChatGPT</h3>
+          <ol class="numbered compact">
+            <li>Download <a href="skills/threefolds.zip" download>threefolds.zip</a>.</li>
+            <li>In the sidebar select <strong>Plugins</strong>, then the <strong>Skills</strong> tab.</li>
+            <li>Select <strong>Create</strong>, then <strong>Upload from your computer</strong>, and choose the file. ChatGPT scans a skill before it becomes available.</li>
+            <li>In any chat, ask ChatGPT to "use the threefolds skill".</li>
+          </ol>
+          <p class="small">OpenAI offers Skills in ChatGPT to Business, Enterprise, Healthcare and Edu workspaces, where the admin allows uploads. On a personal plan, use the prompt below instead. <a href="https://help.openai.com/en/articles/20001066">OpenAI's guide</a></p>
+        </article>
+
+        <article class="import-card tide">
+          <h3>Gemini</h3>
+          <ol class="numbered compact">
+            <li>Download <a href="skills/threefolds/SKILL.md" download="SKILL.md">SKILL.md</a>.</li>
+            <li>At <a href="https://gemini.google.com/">gemini.google.com</a> or in the Gemini app for Mac, click <strong>Customize</strong> in the sidebar (it may be under <strong>More</strong>), then <strong>Skills</strong>.</li>
+            <li>Click <strong>Create</strong>, then <strong>Upload</strong>, and select the file. Review it and click <strong>Create</strong>.</li>
+            <li>In any chat, type <code>/</code> (or <code>@</code>, if you have the newer shortcut) and pick <strong>threefolds</strong>.</li>
+          </ol>
+          <p class="small">Skills are for personal Google accounts, age 18 or over; work and school accounts come later. Uploading works on the web and on Mac. <a href="https://support.google.com/gemini/answer/17094296">Google's guide</a></p>
+        </article>
+      </div>
+
+      <div class="then prompt-block">
+        <h3>No Skills on your plan? Paste this prompt instead</h3>
+        <p>
+          It is the skill's own text. Paste it as a message at the end of the conversation you want to move, in any
+          assistant, and you get the same handoff summary. Threefold also has a button that copies it.
+        </p>
+        <div class="prompt-box" data-handoff-prompt hidden>
+          <button type="button" class="button" hidden>Copy the prompt</button>
+          <pre><code></code></pre>
+        </div>
+        <p class="small" data-handoff-fallback>
+          The prompt is everything below the second <code>---</code> line in
+          <a href="skills/threefolds/SKILL.md">SKILL.md</a>.
+        </p>
+      </div>
+      <p class="note">
+        Read a handoff before you paste it anywhere: it is a summary of your conversation, so it can contain whatever
+        you discussed. The skill tells the assistant to leave out passwords, keys and card numbers. The steps above
+        follow each company's help pages; they have not been tested by us inside every plan.
+      </p>
+    </section>
+
     <section id="privacy" class="band" aria-labelledby="privacy-title">
       <h2 id="privacy-title">Yours, on your machine</h2>
       <div class="privacy-grid">
@@ -454,13 +562,13 @@
           <p>The coding agents read only the folder you choose and ask before every file edit and every command.</p>
         </article>
       </div>
-      <p class="note">Each provider's own API data policy still applies to what you send it. In a Threefold review, your message and the draft go to every reviewer's provider. Deep research runs on ChatGPT and Gemini are stored by that provider, because their long-running modes require it.</p>
+      <p class="note">Each provider's own API data policy still applies to what you send it. In a Threefold review, your message and the draft go to every reviewer's provider. When a chat moves to another provider, by automatic fallback or because you handed it off, the conversation so far is sent to that provider so it can write the summary. Deep research runs on ChatGPT and Gemini are stored by that provider, because their long-running modes require it.</p>
     </section>
 
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is an early preview, built in public. Version 0.4.0 is available as a download for Apple Silicon
+        Threefold is an early preview, built in public. Version 0.5.0 is available as a download for Apple Silicon
         Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
         testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>
@@ -482,6 +590,9 @@
     <p class="built-by">
       <img src="assets/nimeshbuilds.png" width="22" height="22" alt="">
       <span>Built in public by Nimesh under <a href="https://github.com/nimeshbuilds">NimeshBuilds on GitHub</a>.</span>
+    </p>
+    <p>
+      Open source under the <a href="https://github.com/nimeshbuilds/threefold/blob/main/LICENSE">Apache 2.0 licence</a>.
     </p>
     <p>
       Threefold is an independent project. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or

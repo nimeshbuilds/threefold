@@ -4,6 +4,7 @@ import { MODELS, PRICING_AS_OF, currentRates, formatTokens, formatUsd, modelLabe
 import nimeshbuildsLogo from '../assets/nimeshbuilds.png'
 import { API_NAME, MODE_NAME, ORG_URL, daysUntil, shortDate } from '../lib/format'
 import { useApp, type SettingsTab } from '../state'
+import { FallbackSettings, HandoffImportBlock } from './Handoff'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 
@@ -506,8 +507,8 @@ export function SettingsModal() {
                 </div>
               </label>
               <p className="muted small">
-                Shortcuts: ⌘1 Claude mode · ⌘2 ChatGPT mode · ⌘N new chat · ⌘, settings · Enter to send, Shift+Enter for a
-                new line.
+                Shortcuts: ⌘1 Claude mode · ⌘2 ChatGPT mode · ⌘3 Gemini mode · ⌘4 Threefold review · ⌘N new chat · ⇧⌘H
+                continue from a handoff · ⌘, settings · Enter to send, Shift+Enter for a new line.
               </p>
             </>
           )}
@@ -535,6 +536,7 @@ export function SettingsModal() {
               <CreditFields provider="claude" />
               <CreditFields provider="chatgpt" />
               <CreditFields provider="gemini" />
+              <FallbackSettings />
             </>
           )}
 
@@ -556,7 +558,11 @@ export function SettingsModal() {
           {tab === 'import' && (
             <>
               <h2>Import history</h2>
-              <p className="lead">Bring your existing conversations in from the official apps' data exports.</p>
+              <p className="lead">
+                Bring one chat over in a minute with a handoff summary, or bring everything in from the official apps'
+                data exports.
+              </p>
+              <HandoffImportBlock />
               <ImportBlock provider="claude" />
               <ImportBlock provider="chatgpt" />
               <ImportBlock provider="gemini" />

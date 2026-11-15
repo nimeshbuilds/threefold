@@ -1,0 +1,12 @@
+Threefold
+Copyright 2026 Nimesh, NimeshBuilds (https://github.com/nimeshbuilds)
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+Threefold is an independent project. It is not made by, affiliated with or
+endorsed by Anthropic, OpenAI or Google. "Claude", "ChatGPT" and "Gemini" are
+trademarks of their owners.
+
+The downloadable app bundles third-party software that keeps its own licence,
+including Electron and the Claude Agent SDK runtime from Anthropic. Those parts
+are not covered by Threefold's licence.

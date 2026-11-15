@@ -3,6 +3,7 @@ import { formatUsd } from '@shared/pricing'
 import { greeting } from '../lib/format'
 import { useApp } from '../state'
 import { Composer, ModelPicker } from './Composer'
+import { ContinuedNote, HandoffCard, HandoffMenu, HandoffWriting } from './Handoff'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 import { MessageView, StreamingMessage } from './Message'
@@ -68,6 +69,8 @@ export function ChatView() {
   const panel = useApp((s) => s.view.kind === 'threefold')
   const conversation = useApp((s) => s.conversation)
   const streaming = useApp((s) => (s.conversation ? s.streaming[s.conversation.id] : undefined))
+  const moving = useApp((s) => (s.conversation ? s.handoffs[s.conversation.id] : undefined))
+  const openHandoffModal = useApp((s) => s.openHandoffModal)
   const name = useApp((s) => s.settings?.displayName ?? '')
   const hasKey = useApp((s) => s.keys[s.mode])
   const openSettings = useApp((s) => s.openSettings)
@@ -79,16 +82,17 @@ export function ChatView() {
 
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
-  const busy = Boolean(streaming)
+  const busy = Boolean(streaming) || Boolean(moving)
   const messages = conversation?.messages ?? []
-  const empty = messages.length === 0 && !streaming
+  // A chat that starts from a handoff has something to show before its first message.
+  const empty = messages.length === 0 && !streaming && !moving && !conversation?.handoff
 
   // Follow the reply as it grows, unless the reader has scrolled up.
   const stepChars = streaming?.steps.reduce((sum, step) => sum + step.text.length, 0)
   useLayoutEffect(() => {
     const element = scroller.current
     if (element && pinned.current) element.scrollTop = element.scrollHeight
-  }, [messages.length, streaming?.text, streaming?.thinking, streaming?.events.length, streaming?.steps.length, stepChars])
+  }, [messages.length, streaming?.text, streaming?.thinking, streaming?.events.length, streaming?.steps.length, stepChars, moving?.status])
 
   useEffect(() => {
     pinned.current = true
@@ -116,6 +120,7 @@ export function ChatView() {
         )}
         <TitleEditor fallback={panel ? 'New reviewed chat' : 'New chat'} />
         <span className="topbar-spacer" />
+        {!panel && <HandoffMenu />}
         <ChatCost />
       </header>
       {panel && <PanelBar />}
@@ -150,9 +155,14 @@ export function ChatView() {
             {panel ? (
               <PanelBilling />
             ) : (
-              <p className="empty-hint">
-                Replies are billed to your own API key at API prices. The cost of each message shows as it streams.
-              </p>
+              <>
+                <p className="empty-hint">
+                  Replies are billed to your own API key at API prices. The cost of each message shows as it streams.
+                </p>
+                <button className="link-btn" onClick={openHandoffModal}>
+                  <Icon name="handoff" size={14} /> Coming from another app? Continue a chat from a handoff summary
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -179,6 +189,7 @@ export function ChatView() {
                   export. New messages here are sent through the API and stay in Threefold.
                 </div>
               )}
+              {conversation?.handoff && <HandoffCard handoff={conversation.handoff} />}
               {messages.map((message) => (
                 <MessageView
                   key={message.id}
@@ -189,6 +200,8 @@ export function ChatView() {
                 />
               ))}
               {streaming && <StreamingMessage streaming={streaming} />}
+              {moving && <HandoffWriting progress={moving} />}
+              {conversation?.continuedIn && !busy && <ContinuedNote target={conversation.continuedIn} />}
             </div>
           </div>
           <div className="composer-dock">

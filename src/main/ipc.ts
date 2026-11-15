@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, ipcMain, shell } from 'electron'
 import { isProvider } from '@shared/types'
 import type {
   Attachment,
@@ -17,6 +17,7 @@ import type {
   Settings,
 } from '@shared/types'
 import { MODELS } from '@shared/pricing'
+import { parseHandoff } from '@shared/handoff'
 import { ChatService, DEMO } from './chat'
 import { CodeService } from './code/service'
 import { importExport } from './importService'
@@ -149,7 +150,12 @@ export function registerIpc(deps: IpcDeps): void {
   })
   handle(
     'conversations:update',
-    (id: string, patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers'>>) => {
+    (
+      id: string,
+      patch: Partial<
+        Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers' | 'noFallback'>
+      >,
+    ) => {
       const conversation = store.getConversation(id)
       if (!conversation) return null
       if (typeof patch.title === 'string' && patch.title.trim()) conversation.title = patch.title.trim().slice(0, 120)
@@ -163,6 +169,7 @@ export function registerIpc(deps: IpcDeps): void {
       if (patch.tools) conversation.tools = { ...conversation.tools, ...patch.tools }
       if (patch.effort) conversation.effort = patch.effort
       if (typeof patch.pinned === 'boolean') conversation.pinned = patch.pinned
+      if (typeof patch.noFallback === 'boolean') conversation.noFallback = patch.noFallback || undefined
       if ('projectId' in patch) conversation.projectId = patch.projectId
       if (patch.reviewers !== undefined && conversation.panel) {
         conversation.reviewers = cleanReviewers(patch.reviewers)
@@ -171,6 +178,15 @@ export function registerIpc(deps: IpcDeps): void {
       return store.saveConversation(conversation)
     },
   )
+  handle('conversations:fromHandoff', (input: { provider: Provider; text: string }) => {
+    const parsed = parseHandoff(String(input?.text ?? ''))
+    if (!parsed || !isProvider(input?.provider)) return null
+    const conversation = store.createConversation(input.provider, store.getSettings().defaultModel[input.provider])
+    conversation.title = parsed.title ?? 'Continued chat'
+    conversation.handoff = { source: 'pasted', summary: parsed.summary, from: parsed.from, createdAt: Date.now() }
+    store.saveConversation(conversation)
+    return conversation
+  })
   handle('conversations:remove', (id: string) => {
     chat.stop(id)
     store.deleteConversation(id)
@@ -180,6 +196,9 @@ export function registerIpc(deps: IpcDeps): void {
   // ---------- chat ----------
 
   handle('chat:send', (request: SendRequest) => chat.start(request))
+  handle('chat:handoff', (conversationId: string, to: Provider) =>
+    isProvider(to) ? chat.handoff(String(conversationId), to) : { ok: false, error: 'Unknown provider.' },
+  )
   handle('chat:stop', (conversationId: string) => chat.stop(conversationId))
 
   // ---------- attachments ----------
@@ -348,5 +367,6 @@ export function registerIpc(deps: IpcDeps): void {
     // Only ever hand web links to the system browser.
     if (/^https?:\/\//i.test(String(url))) await shell.openExternal(String(url))
   })
+  handle('app:copyText', (text: string) => clipboard.writeText(String(text ?? '')))
   handle('app:version', () => app.getVersion())
 }

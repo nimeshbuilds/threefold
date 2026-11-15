@@ -8,7 +8,7 @@ Threefold is a desktop app for macOS with a Claude mode, a ChatGPT mode and a Ge
 
 It exists because paid Claude, ChatGPT and Google AI plans now include monthly API credits that the official apps cannot spend. Threefold gives those credits somewhere to go.
 
-[Website](https://nimeshbuilds.github.io/threefold/) · Built in public by Nimesh under [NimeshBuilds](https://github.com/nimeshbuilds)
+[Website](https://nimeshbuilds.github.io/threefold/) · Built in public by Nimesh under [NimeshBuilds](https://github.com/nimeshbuilds) · [Apache 2.0](LICENSE)
 
 > Threefold is an independent project. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or Google. "Claude", "ChatGPT" and "Gemini" are trademarks of their owners and are used only to say which API a mode connects to.
 
@@ -29,6 +29,8 @@ It exists because paid Claude, ChatGPT and Google AI plans now include monthly A
 | Memory across chats, shared by every mode | Yes | Yes | Yes |
 | Coding agent in a project folder | Claude Agent SDK | Threefold's own agent | Threefold's own agent |
 | Import history from a data export | Yes | Yes | Activity log, grouped into chats |
+| Continue a chat from a handoff summary (the `threefolds` skill) | Yes | Yes | Yes |
+| Automatic fallback to another provider when credit runs low | Yes | Yes | Yes |
 
 | ChatGPT mode | Gemini mode |
 |---|---|
@@ -61,6 +63,39 @@ Switch on **Deep research** (the sliders button) for one message. The model plan
 In **Threefold review**, deep research makes the draft a full research run. The reviewers may then search the web themselves to check the report's claims and sources, and the answering model rewrites it with their findings (with web search available, but not as a second research run).
 
 ![A research report with its sources and cost](docs/screenshots/research.png)
+
+### Automatic fallback
+
+Each plan's API credit is a monthly allowance, and they rarely run out on the same day. With **automatic fallback** switched on (Settings → Credits), Threefold watches each provider's credit and moves a chat to another provider when the one it is on is nearly used up.
+
+- **It switches at 85% by default.** Once a provider's monthly credit is that far used, your next message goes to another connected provider that has credit to spare. You can change the threshold (70 to 95%) and name a preferred provider; otherwise the one with the most dollars of credit left is used.
+- **The chat comes with you.** The provider you move to first writes a **handoff summary** of the conversation so far: the goal, the background, what was done, where things stand and what comes next. A new chat opens in that provider's mode, starts from the summary, and answers the message you were sending. The original chat stays where it was, with a link to where it continues.
+- **You are told first.** A note above the message box says that the next message will move, and "Stay on …" keeps that one chat where it is.
+- **Nothing is hidden on the bill.** Writing the summary is one extra API request. It is billed by the provider you move to, shown in the new chat with its cost, counted in the meter and recorded in the spend ledger.
+
+![A chat that moved from Claude to ChatGPT, with its handoff summary](docs/screenshots/fallback.png)
+
+What it will not do: it is off until you switch it on; it needs at least two connected providers; it only moves to a provider that has a monthly credit set and is itself under the threshold, so it never shifts your bill onto a card; and Threefold review chats and the Code tab never switch. A new chat with no history simply starts with the provider that has credit, with no summary. If the summary cannot be written, the message is answered by the original provider and you are told why.
+
+A summary carries the gist of a conversation, not every word, and the model you move to has not seen the files or images from the earlier chat. You can hand any chat to another provider yourself with **Hand off** in the top bar.
+
+### Handoff summaries and the `threefolds` skill
+
+The same summary works in the other direction: from the official apps into Threefold, with no export and no import.
+
+`threefolds` is a skill for the official Claude, ChatGPT and Gemini apps. It is one text file of instructions ([skills/threefolds/SKILL.md](skills/threefolds/SKILL.md)) with no code in it. Run it in any existing conversation and the assistant writes a handoff summary of that conversation. Paste the summary into Threefold (**File → Continue from a Handoff…**, or the link under the message box of a new chat) and carry on in whichever mode you like.
+
+Download [threefolds.zip](https://nimeshbuilds.github.io/threefold/skills/threefolds.zip) or the bare [SKILL.md](https://nimeshbuilds.github.io/threefold/skills/threefolds/SKILL.md), then add it to the app:
+
+| App | Where to add it | How to run it | Who has Skills |
+|---|---|---|---|
+| Claude | Turn on **Code execution and file creation** in Settings → Capabilities. Then **Customize → Skills → + → + Create skill → Upload a skill**, and choose the ZIP. | Type `/threefolds` or ask Claude to "use the threefolds skill" | Every plan, including Free. On Team and Enterprise an owner has to allow them. [Guide](https://support.claude.com/en/articles/12512180) |
+| ChatGPT | Sidebar → **Plugins** → **Skills** tab → **Create → Upload from your computer**. ChatGPT scans a skill before it becomes available. | Ask ChatGPT to "use the threefolds skill" | Business, Enterprise, Healthcare and Edu workspaces, where the admin allows uploads. Not personal plans. [Guide](https://help.openai.com/en/articles/20001066) |
+| Gemini | On the web or the Mac app: **Customize** (it may be under More) → **Skills** → **Create → Upload**, and select `SKILL.md`. | Type `/` (or `@` with the newer shortcut) and pick threefolds | Personal Google accounts, age 18 or over. [Guide](https://support.google.com/gemini/answer/17094296) |
+
+**No Skills on your plan?** The skill's text also works as a plain prompt. Threefold has a **Copy the prompt** button (in the handoff dialog and in Settings → Import history), and the [website](https://nimeshbuilds.github.io/threefold/#handoff) shows it too. Paste it as a message at the end of the conversation you want to move.
+
+Read a handoff before you paste it anywhere: it is a summary of your conversation, so it can contain whatever you discussed. The skill tells the assistant to leave out passwords, keys and card numbers. A pasted summary costs nothing until you send a message; it then goes to that mode's API as background, billed as input tokens.
 
 ### What each API offers, and what Threefold uses
 
@@ -177,7 +212,7 @@ Demo mode makes no network calls and costs nothing. Replies are canned.
 
 ## Importing your history
 
-Ask each company for an export of your data, then hand the ZIP to Threefold. Do not unzip it.
+To carry on with just one conversation, a [handoff summary](#handoff-summaries-and-the-threefolds-skill) is quicker than an export. To bring every old chat in word for word, ask each company for an export of your data, then hand the ZIP to Threefold. Do not unzip it.
 
 **Claude**
 
@@ -250,6 +285,7 @@ Things to know:
 - Ordinary OpenAI requests are sent with `store: false`. **Deep research is the exception:** OpenAI's background mode and Google's research agent both require the run to be stored on their side.
 - Each provider's normal API data policies apply; note that Google may use free-tier (unbilled) Gemini API content to improve its products.
 - In a Threefold review, your message and the draft answer are sent to every reviewer's provider.
+- When a chat moves to another provider, by automatic fallback or because you handed it off, the conversation so far is sent to that provider so it can write the handoff summary. Fallback is off until you switch it on.
 - The window runs sandboxed with context isolation. Pages the model writes are previewed in a sandboxed frame with no access to the app.
 - The coding agents can read the project folder you choose. They ask before every file edit and every shell command, and Threefold's own agents cannot touch paths outside that folder.
 
@@ -273,6 +309,9 @@ pnpm test:e2e
 | `src/main/panel.ts` | The Threefold review engine (draft, review, final) |
 | `src/main/code/` | The three coding agents and their shared file and shell tools |
 | `src/main/importers.ts` | Parsers for the ChatGPT, Claude and Gemini exports |
+| `src/main/handoff.ts`, `src/shared/handoff.ts` | Writing, reading and passing on handoff summaries |
+| `src/shared/fallback.ts` | Deciding when a chat moves to another provider |
+| `skills/threefolds/` | The `threefolds` skill; `pnpm skill` publishes it to `docs/skills/` |
 | `src/main/store.ts` | Local JSON storage and the spend ledger |
 | `src/shared/pricing.ts` | Price table and cost maths |
 | `src/renderer/` | The React interface |
@@ -284,8 +323,8 @@ pnpm test:e2e
 
 **Tested automatically, with no API key:**
 
-- 112 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
-- 67 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
+- 149 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, automatic fallback (when it switches, where to, what is billed, what happens when the summary fails or is stopped), handoff summaries and the published skill files, storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
+- 97 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, automatic fallback, manual handoff, pasting a handoff, projects, memory, spend, dark theme and what is written to disk.
 
 **Not run against the real APIs by the automated tests.** The provider code is written against the official SDK type definitions and documentation and compiles against them. A live suite is ready for checking it with your own keys:
 
@@ -298,3 +337,11 @@ Set any subset of the three keys. For each provider it checks the key, streaming
 Deep research is left out of that run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
 
 Also not verified: the Gemini importer against a real Takeout file (it is tested against Google's documented record shape and folder layout), the first-launch macOS warning on a freshly downloaded copy of the release, and the three coding agents against real projects.
+
+Not verified for fallback and handoff: a summary written by a real model (the tests use stand-in providers, so the quality of real summaries is untested), and uploading the `threefolds` skill inside the official Claude, ChatGPT and Gemini apps. The install steps follow each company's help pages as they read in November 2026; the skill has not been run inside those apps.
+
+## Licence
+
+Threefold is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
+The downloadable app bundles third-party software that keeps its own licence, including Electron and Anthropic's Claude Agent SDK runtime; those parts are not covered by Threefold's licence.

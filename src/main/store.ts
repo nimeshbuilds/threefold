@@ -20,6 +20,7 @@ import type {
 } from '@shared/types'
 import { isProvider } from '@shared/types'
 import { DEFAULT_MODEL, billingCycle } from '@shared/pricing'
+import { DEFAULT_FALLBACK, cleanFallback } from '@shared/fallback'
 
 const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   displayName: '',
   reviewers: [],
+  fallback: { ...DEFAULT_FALLBACK },
 }
 
 const IMAGE_EXT: Record<string, string> = {
@@ -155,6 +157,7 @@ export class Store {
     }
     if (!isProvider(this.settings.lastProvider)) this.settings.lastProvider = 'claude'
     if (!Array.isArray(this.settings.reviewers)) this.settings.reviewers = []
+    this.settings.fallback = cleanFallback(saved.fallback)
     this.loadIndex()
   }
 
@@ -178,6 +181,7 @@ export class Store {
         chatgpt: { ...this.settings.credits.chatgpt, ...patch.credits?.chatgpt },
         gemini: { ...this.settings.credits.gemini, ...patch.credits?.gemini },
       },
+      fallback: cleanFallback({ ...this.settings.fallback, ...patch.fallback }),
     }
     writeJson(this.file('settings.json'), this.settings)
     return this.settings

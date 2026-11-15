@@ -1,10 +1,10 @@
 {
   "name": "threefold",
-  "version": "0.4.0",
-  "description": "Threefold \u2014 a local desktop app for Claude, ChatGPT and Gemini that runs on your own API keys and shows what every message costs.",
+  "version": "0.5.0",
+  "description": "Threefold — a local desktop app for Claude, ChatGPT and Gemini that runs on your own API keys and shows what every message costs.",
   "main": "./out/main/index.js",
   "author": "nimeshbuilds",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,7 +22,8 @@
     "postinstall": "node node_modules/electron/install.js",
     "test:e2e": "electron-vite build && node tests/e2e/smoke.mjs",
     "demo": "electron-vite build && THREEFOLD_DEMO=1 THREEFOLD_DATA_DIR=.demo-data electron .",
-    "test:live": "vitest run --config vitest.live.config.ts"
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "skill": "node scripts/make-skill.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.325",

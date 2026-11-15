@@ -770,6 +770,50 @@ pre.cmd code {
   margin-top: 10px;
 }
 
+/* ---------- handoff ---------- */
+
+.handoff-steps code,
+.import-card code {
+  white-space: nowrap;
+}
+
+.prompt-block p {
+  max-width: 76ch;
+}
+
+.prompt-box {
+  position: relative;
+  margin-top: 16px;
+}
+
+.prompt-box .button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.prompt-box pre {
+  margin: 0;
+  padding: 16px 18px;
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--band);
+}
+
+.prompt-box code {
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- status and footer ---------- */
 
 .status {

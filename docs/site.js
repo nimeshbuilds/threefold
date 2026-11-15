@@ -59,3 +59,38 @@
     block.appendChild(button)
   })
 })()
+
+// Fills the handoff prompt box from the published skill file, so the prompt on
+// this page can never drift from the skill. Without scripting, the page links
+// to the file instead.
+;(function () {
+  var box = document.querySelector('[data-handoff-prompt]')
+  if (!box || !window.fetch) return
+  var intro = 'Follow the instructions below for this conversation, right now.'
+  fetch('skills/threefolds/SKILL.md')
+    .then(function (response) {
+      if (!response.ok) throw new Error('not found')
+      return response.text()
+    })
+    .then(function (text) {
+      // Drop the front matter between the two "---" lines; the rest is the prompt.
+      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').trim()
+      var code = box.querySelector('code')
+      code.textContent = intro + '\n\n' + body
+      box.hidden = false
+      var fallback = document.querySelector('[data-handoff-fallback]')
+      if (fallback) fallback.hidden = true
+      var button = box.querySelector('button')
+      if (!button || !navigator.clipboard) return
+      button.hidden = false
+      button.addEventListener('click', function () {
+        navigator.clipboard.writeText(code.textContent).then(function () {
+          button.textContent = 'Copied'
+          setTimeout(function () {
+            button.textContent = 'Copy the prompt'
+          }, 1600)
+        })
+      })
+    })
+    .catch(function () {})
+})()

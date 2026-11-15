@@ -6,12 +6,14 @@ import type {
   ChatTools,
   Citation,
   Conversation,
+  Handoff,
   Memory,
   Project,
   Provider,
   ToolEvent,
   Usage,
 } from '@shared/types'
+import { handoffSystemNote } from '@shared/handoff'
 import { MAX_INLINE_TEXT_BYTES, MAX_MEDIA_BYTES, type Store } from '../store'
 
 export interface TurnContext {
@@ -115,6 +117,8 @@ export function buildSystemPrompt(input: {
   memories: Memory[]
   memoryEnabled: boolean
   tools: ChatTools
+  /** The chat continues another conversation from this summary. */
+  handoff?: Pick<Handoff, 'summary' | 'from'>
   now?: Date
 }): string {
   const { provider, displayName, project, memories, memoryEnabled } = input
@@ -158,6 +162,7 @@ export function buildSystemPrompt(input: {
     }
     parts.push(lines.join('\n\n'))
   }
+  if (input.handoff?.summary.trim()) parts.push(handoffSystemNote(input.handoff))
   return parts.join('\n\n')
 }
 

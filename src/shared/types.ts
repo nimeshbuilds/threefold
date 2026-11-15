@@ -126,9 +126,35 @@ export interface ConversationMeta {
   messageCount: number
 }
 
+/**
+ * A summary that carries a conversation from one assistant to another. The
+ * receiving model reads it as the history of the chat.
+ */
+export interface Handoff {
+  /** fallback: written automatically when credit ran low. manual: the user asked. pasted: written in another app. */
+  source: 'fallback' | 'manual' | 'pasted'
+  summary: string
+  /** Who the conversation was with before, as shown to the user and the model. */
+  from?: string
+  fromProvider?: Provider
+  fromConversationId?: string
+  /** Model that wrote the summary and what that cost. Absent for a pasted handoff. */
+  model?: string
+  usage?: Usage
+  /** Automatic fallback only: how much of the monthly credit was used when it happened. */
+  usedPct?: number
+  createdAt: number
+}
+
 export interface Conversation extends ConversationMeta {
   tools: ChatTools
   effort: Effort
+  /** This chat continues another one, from this summary. */
+  handoff?: Handoff
+  /** This chat was handed off; the conversation goes on in another chat. */
+  continuedIn?: { conversationId: string; provider: Provider }
+  /** The user chose to keep this chat on its provider even when credit runs low. */
+  noFallback?: boolean
   /** System prompt frozen when the first message was sent. */
   system?: string
   /** Provider-side code sandbox reused across turns. */
@@ -163,6 +189,15 @@ export interface CreditPlan {
   renewalDay: number
 }
 
+/** Moving to another provider when one provider's monthly credit is nearly used up. */
+export interface FallbackSettings {
+  enabled: boolean
+  /** Switch once this share of the monthly credit is used, in percent. */
+  thresholdPct: number
+  /** Provider to switch to when it has credit to spare; 'auto' picks the one with the most left. */
+  prefer: Provider | 'auto'
+}
+
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
   lastProvider: Provider
@@ -173,6 +208,7 @@ export interface Settings {
   displayName: string
   /** Reviewers last chosen in the Threefold tab. */
   reviewers: ModelRef[]
+  fallback: FallbackSettings
 }
 
 export type KeyStatus = Record<Provider, boolean>
@@ -182,7 +218,7 @@ export interface LedgerEntry {
   provider: Provider
   model: string
   costUsd: number
-  kind: 'chat' | 'code' | 'title'
+  kind: 'chat' | 'code' | 'title' | 'handoff'
   ref: string
   inputTokens: number
   outputTokens: number
@@ -205,6 +241,25 @@ export interface SpendSummary {
 
 // ---------- chat streaming events (main -> renderer) ----------
 
+/** Progress of moving a chat to another provider. */
+export interface HandoffProgress {
+  status: 'writing' | 'done' | 'failed' | 'stopped'
+  /** credit: automatic fallback. manual: the user asked for it. */
+  reason: 'credit' | 'manual'
+  from: Provider
+  to: Provider
+  /** Model writing the summary. */
+  model: string
+  usedPct?: number
+  /** Running cost of writing the summary. */
+  usage?: Usage
+  /** done: the chat that continues the conversation. */
+  conversation?: Conversation
+  error?: string
+  /** stopped: the message that was not sent, to put back in the message box. */
+  unsent?: { text: string; attachments: Attachment[] }
+}
+
 export type ChatEvent =
   | { type: 'user'; conversationId: string; message: ChatMessage }
   | { type: 'start'; conversationId: string; messageId: string; model: string }
@@ -217,6 +272,7 @@ export type ChatEvent =
   | { type: 'done'; conversationId: string; message: ChatMessage; meta: ConversationMeta }
   | { type: 'meta'; conversationId: string; meta: ConversationMeta }
   | { type: 'error'; conversationId: string; messageId?: string; error: string }
+  | { type: 'handoff'; conversationId: string; handoff: HandoffProgress }
 
 export interface SendRequest {
   conversationId: string
@@ -333,13 +389,19 @@ export interface ThreefoldApi {
     }): Promise<Conversation>
     update(
       id: string,
-      patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers'>>,
+      patch: Partial<
+        Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers' | 'noFallback'>
+      >,
     ): Promise<ConversationMeta | null>
+    /** Starts a chat from a handoff summary written elsewhere. Null when the text is empty. */
+    fromHandoff(input: { provider: Provider; text: string }): Promise<Conversation | null>
     remove(id: string): Promise<void>
     search(query: string, provider: Provider): Promise<ConversationMeta[]>
   }
   chat: {
     send(req: SendRequest): Promise<{ ok: boolean; error?: string }>
+    /** Writes a handoff summary of a chat and continues it with another provider. */
+    handoff(conversationId: string, to: Provider): Promise<{ ok: boolean; error?: string }>
     stop(conversationId: string): Promise<void>
     onEvent(listener: (event: ChatEvent) => void): () => void
   }
@@ -389,6 +451,8 @@ export interface ThreefoldApi {
   }
   app: {
     openExternal(url: string): Promise<void>
+    /** Puts text on the clipboard. Works whether or not the window has focus. */
+    copyText(text: string): Promise<void>
     version(): Promise<string>
     platform: string
   }

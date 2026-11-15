@@ -5,6 +5,7 @@
 import zlib from 'node:zlib'
 import { IMAGE_PROVIDERS, type Attachment } from '@shared/types'
 import { estimateTokens } from '@shared/pricing'
+import { HANDOFF_END, HANDOFF_HEADING, HANDOFF_WRITER_OPENING } from '@shared/handoff'
 import { REVIEWER_SYSTEM, REVISION_OPENING } from '../panel'
 import { EventLog, isResearch, type TurnContext, type TurnResult } from './common'
 import { LiveMeter } from './meter'
@@ -67,6 +68,40 @@ const REVIEW_OF_REPORT = `The report is sound overall. Two things to fix:
 1. Finding 2 rests on a single source. Add a second, independent one.
 2. The summary states a figure that the findings do not support. Correct it or cite it.`
 
+/** Stands in for the summary a real model writes when a chat moves to another provider. */
+function demoHandoff(prompt: string): string {
+  const from = prompt.match(/For the "From" line write: (.+?)\. For the "Date"/)?.[1] ?? 'another assistant'
+  const firstUser = prompt.match(/<conversation>\nUSER:\n([^\n]*)/)?.[1] ?? ''
+  return `${HANDOFF_HEADING}
+
+- **Title:** Demo handoff
+- **From:** ${from}
+- **Date:** today
+
+## Goal
+Show how a chat is carried from one provider to another (demo mode, so nothing was charged).
+
+## Background
+- The conversation opened with: "${firstUser.slice(0, 120)}"
+
+## What has been done
+The earlier messages were read and condensed into this summary.
+
+## Current state
+With a real key this section holds the latest version of whatever was being worked on.
+
+## Open questions and next steps
+Answer the message the user was about to send.
+
+## Details to keep
+None.
+
+## How to work with this user
+Direct answers in Markdown.
+
+${HANDOFF_END}`
+}
+
 /** A small solid-colour PNG, standing in for a generated image in demo mode. */
 function demoPng(): Buffer {
   const size = 96
@@ -93,9 +128,10 @@ function demoPng(): Buffer {
   ])
 }
 
-function reply(prompt: string, mode: string): string {
+function reply(prompt: string, mode: string, handedOff: boolean): string {
   if (/page|html|artifact|demo/i.test(prompt)) return ARTIFACT
   return (
+    (handedOff ? 'Picking up from the **handoff summary**, so you do not have to repeat yourself.\n\n' : '') +
     `This is **demo mode** in ${mode} mode, so no API call was made and nothing was charged.\n\n` +
     `You said:\n\n> ${prompt.slice(0, 300) || '(nothing)'}\n\n` +
     'With a real API key this reply would come from the model you picked, and the meter above ' +
@@ -116,10 +152,13 @@ export async function runMockTurn(ctx: TurnContext): Promise<TurnResult> {
   const mode = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }[ctx.conversation.provider]
   const research = isResearch(ctx.history)
   const reviewing = ctx.system.startsWith(REVIEWER_SYSTEM)
+  const writingHandoff = ctx.system.startsWith(HANDOFF_WRITER_OPENING)
   const wantsImage =
     ctx.conversation.tools.imageGen && IMAGE_PROVIDERS.includes(ctx.conversation.provider) && /image|picture|draw|logo/i.test(prompt)
   const generated: Attachment[] = []
-  const full = reviewing
+  const full = writingHandoff
+    ? demoHandoff(prompt)
+    : reviewing
     ? ctx.system === REVIEWER_SYSTEM
       ? REVIEW
       : REVIEW_OF_REPORT
@@ -129,7 +168,7 @@ export async function runMockTurn(ctx: TurnContext): Promise<TurnResult> {
         ? REPORT
         : wantsImage
           ? 'Here is the image you asked for (a plain placeholder, because this is demo mode).'
-          : reply(prompt, mode)
+          : reply(prompt, mode, ctx.system.includes('<handoff>'))
   const historyChars = ctx.history.reduce((sum, m) => sum + m.text.length, 0) + ctx.system.length
   const inputTokens = estimateTokens(historyChars)
   let text = ''

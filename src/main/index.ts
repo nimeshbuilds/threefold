@@ -123,6 +123,11 @@ function buildMenu(): void {
       label: 'File',
       submenu: [
         { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => sendToWindow('menu', 'new-chat') },
+        {
+          label: 'Continue from a Handoff…',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          click: () => sendToWindow('menu', 'paste-handoff'),
+        },
         { type: 'separator' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToWindow('menu', 'settings') },
         { type: 'separator' },

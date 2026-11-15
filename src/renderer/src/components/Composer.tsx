@@ -4,6 +4,7 @@ import { findModel, modelLabel } from '@shared/pricing'
 import { MODE_NAME } from '../lib/format'
 import { activeModel, useApp } from '../state'
 import { Icon } from './Icon'
+import { FallbackNotice } from './Handoff'
 import { AttachmentChip } from './Message'
 import { Popover } from './Popover'
 
@@ -172,6 +173,8 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
   const tools = useApp((s) => s.conversation?.tools ?? s.draft.tools)
   const research = useApp((s) => s.researchNext)
   const setResearch = useApp((s) => s.setResearchNext)
+  // A chat that starts from a handoff and has no messages yet: the first message picks the thread up.
+  const resuming = useApp((s) => Boolean(s.conversation?.handoff) && s.conversation?.messages.length === 0)
 
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -267,6 +270,7 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
           </button>
         </div>
       )}
+      {!panel && !truncateFrom && <FallbackNotice />}
       {research && (
         <div className="composer-note research">
           <Icon name="search" size={14} />
@@ -290,7 +294,7 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
         ref={textarea}
         value={text}
         rows={1}
-        placeholder={panel ? 'Ask for a reviewed answer' : PLACEHOLDER[mode]}
+        placeholder={panel ? 'Ask for a reviewed answer' : resuming ? 'Say what to do next, or just type “continue”' : PLACEHOLDER[mode]}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {

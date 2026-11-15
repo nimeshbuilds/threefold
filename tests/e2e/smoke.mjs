@@ -295,6 +295,159 @@ try {
   await shot('14-code')
   check('code tab opens', true)
 
+  // ---- automatic fallback: a provider that is low on credit hands the chat to another ----
+  const answered = () => page.waitForSelector('.msg.assistant:not(.streaming) .usage-line', { timeout: 20000 })
+  await page.click('.side-btn:has-text("New chat")')
+  await page.click('.mode-switch button:has-text("Claude")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
+  await page.locator('.chat-row:has-text("Explain what the cost meter")').click()
+  await page.waitForSelector('.msg.assistant')
+  check('nothing warns about credit while there is plenty', (await page.locator('.composer-note.fallback').count()) === 0)
+  check('a chat with history can be handed off by hand', (await page.locator('.handoff-button').count()) === 1)
+
+  await page.click('.user-row')
+  await page.click('.modal-nav .side-btn:has-text("Credits")')
+  const fallbackSwitch = page.locator('.fallback-settings .switch')
+  check('automatic fallback is off until it is switched on', (await fallbackSwitch.getAttribute('aria-checked')) === 'false')
+  await fallbackSwitch.click()
+  await page.waitForSelector('.fallback-settings .seg')
+  check('the switch shows that fallback is on', (await fallbackSwitch.getAttribute('aria-checked')) === 'true' && /\bon\b/.test((await fallbackSwitch.getAttribute('class')) ?? ''))
+  check('fallback switches at 85% unless changed', (await page.locator('.fallback-settings .seg button.active:has-text("85%")').count()) === 1)
+  const fallbackText = (await page.textContent('.fallback-settings')) ?? ''
+  check(
+    'fallback settings say that the chat is sent to the new provider and who bills the summary',
+    /conversation so far is sent to the provider you switch to/.test(fallbackText) && /billed by that provider/.test(fallbackText),
+  )
+  // Pretend Claude's monthly credit is nearly gone: set the grant so that exactly 90% of it is spent.
+  const spentSoFar = await page.evaluate(() => window.threefold.usage.summary())
+  await page.locator('.credit-fields').first().locator('input[type="number"]').first().fill((spentSoFar.claude.spentUsd / 0.9).toFixed(8))
+  await page.locator('.fallback-settings').scrollIntoViewIfNeeded()
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(300)
+  await shot('16-fallback-settings')
+  await page.click('.modal-close')
+
+  await page.waitForSelector('.composer-note.fallback')
+  const warning = (await page.textContent('.composer-note.fallback')) ?? ''
+  check(
+    'the message box says beforehand that the next message will move',
+    /Claude credit is (89|90)% used/.test(warning) && /continues in ChatGPT/.test(warning) && /handoff summary/.test(warning) && /Stay on Claude/.test(warning),
+    warning,
+  )
+  await shot('17-fallback-notice')
+  await page.fill('.composer textarea', 'And what does the dot mean?')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.handoff-card.writing')
+  const writing = (await page.textContent('.handoff-card.writing')) ?? ''
+  check(
+    'the chat shows that a summary is being written, and by which model',
+    /Moving this chat to ChatGPT/.test(writing) && /GPT-6\.1 Sol is writing a handoff summary/.test(writing),
+    writing,
+  )
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt', null, { timeout: 20000 })
+  await page.waitForSelector('.handoff-card:not(.writing)')
+  await answered()
+  const card = (await page.textContent('.handoff-card')) ?? ''
+  check(
+    'the new chat says where it came from, why, and what the summary cost',
+    /Continued from Claude/.test(card) && /credit was (89|90)% used/.test(card) && /GPT-6\.1 Sol wrote a summary/.test(card) && /for \$0\.\d+/.test(card),
+    card,
+  )
+  check('the message is answered by the new provider', /GPT-6\.1 Sol/.test((await page.textContent('.msg.assistant .usage-line')) ?? ''))
+  check('the new model picks up from the summary', /Picking up from the handoff summary/.test((await page.textContent('.msg.assistant .markdown')) ?? ''))
+  check('the message that was being sent moved with the chat', /And what does the dot mean\?/.test((await page.textContent('.msg.user')) ?? ''))
+  check('the chat keeps its title in the new mode', (await page.locator('.chat-row.active:has-text("Explain what the cost meter")').count()) === 1)
+  await page.click('.handoff-actions button:has-text("Read the summary")')
+  const summaryText = (await page.textContent('.handoff-summary')) ?? ''
+  check('the summary can be read in the chat', /Threefold handoff/.test(summaryText) && /Explain what the cost meter shows/.test(summaryText), summaryText.slice(0, 60))
+  await shot('19-fallback-continued')
+
+  await page.click('.handoff-actions button:has-text("Open the original chat")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
+  await page.waitForSelector('.continued-note')
+  check('the original chat points to where it continues', /continues in ChatGPT/.test((await page.textContent('.continued-note')) ?? ''))
+  check('the original chat is left as it was', (await page.locator('.msg.user').count()) === 2)
+
+  // One chat can be told to stay on its provider.
+  await page.locator('.chat-row:has-text("Research the state")').click()
+  await page.waitForSelector('.composer-note.fallback')
+  await page.click('.composer-note.fallback button:has-text("Stay on Claude")')
+  await page.waitForSelector('.composer-note.fallback', { state: 'detached' })
+  const repliesBefore = await page.locator('.msg.assistant:not(.streaming)').count()
+  await page.fill('.composer textarea', 'Say that in one line')
+  await page.keyboard.press('Enter')
+  await page.waitForFunction((n) => document.querySelectorAll('.msg.assistant:not(.streaming)').length > n, repliesBefore, { timeout: 20000 })
+  check(
+    'a chat told to stay keeps answering on its own provider',
+    (await page.getAttribute('html', 'data-mode')) === 'claude' && (await page.locator('.handoff-card').count()) === 0,
+  )
+
+  // A brand-new chat has nothing to summarise: it simply starts where there is credit.
+  await page.click('.side-btn:has-text("New chat")')
+  await page.waitForSelector('.composer-note.fallback')
+  check('a new chat says it will start elsewhere', /This chat will start in ChatGPT/.test((await page.textContent('.composer-note.fallback')) ?? ''))
+  await page.fill('.composer textarea', 'A fresh question')
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt', null, { timeout: 20000 })
+  await answered()
+  check(
+    'a new chat starts with the provider that has credit, with no summary',
+    /GPT-6\.1 Sol/.test((await page.textContent('.msg.assistant .usage-line')) ?? '') && (await page.locator('.handoff-card').count()) === 0,
+  )
+
+  // ---- handing a chat off by hand ----
+  await page.click('.handoff-button')
+  const handoffMenu = (await page.textContent('.handoff-menu .menu')) ?? ''
+  check('hand off lists the other providers and who bills the summary', /Gemini/.test(handoffMenu) && /Claude/.test(handoffMenu) && /billed by Google/.test(handoffMenu), handoffMenu)
+  await page.click('.handoff-menu .menu-item:has-text("Gemini")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'gemini', null, { timeout: 20000 })
+  await page.waitForSelector('.handoff-card:not(.writing)')
+  const manualCard = (await page.textContent('.handoff-card')) ?? ''
+  check(
+    'a manual handoff opens a new chat that starts from the summary',
+    /Continued from ChatGPT/.test(manualCard) && /Gemini 4 Hydrogen wrote a summary/.test(manualCard) && (await page.locator('.msg').count()) === 0,
+    manualCard,
+  )
+  check('the message box invites the user to carry on', /continue/.test((await page.getAttribute('.composer textarea', 'placeholder')) ?? ''))
+
+  // ---- continuing a chat from another app: paste a handoff written by the threefolds skill ----
+  await page.click('.side-btn:has-text("New chat")')
+  await page.click('.link-btn')
+  await page.waitForSelector('.handoff-modal')
+  check('the paste dialog names the skill', /threefolds/.test((await page.textContent('.handoff-modal')) ?? ''))
+  check('nothing can be continued until a summary is pasted', await page.locator('.handoff-modal .btn.primary').isDisabled())
+  await page.click('.handoff-modal .btn:has-text("Copy the prompt")')
+  const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
+  check('the prompt for apps without Skills can be copied', /^Follow the instructions below/.test(copied) && /# Threefold handoff/.test(copied) && /end of handoff/.test(copied), copied.slice(0, 50))
+  await page.fill(
+    '.handoff-input',
+    'Sure, here it is:\n\n# Threefold handoff\n\n**Title:** Budget review\n**From:** ChatGPT\n\n## Goal\nCut hosting costs by a third.\n\n--- end of handoff ---\nCopy this message.',
+  )
+  await shot('20-handoff-paste')
+  await page.click('.handoff-modal .btn.primary')
+  await page.waitForSelector('.handoff-card')
+  const pastedCard = (await page.textContent('.handoff-card')) ?? ''
+  check(
+    'a pasted handoff becomes a chat with its title and origin',
+    /Budget review/.test((await page.textContent('.topbar-title')) ?? '') && /Continued from ChatGPT/.test(pastedCard) && /You pasted this handoff summary/.test(pastedCard),
+    pastedCard,
+  )
+  await page.click('.handoff-actions button:has-text("Read the summary")')
+  const pastedSummary = (await page.textContent('.handoff-summary')) ?? ''
+  check('only the handoff itself is kept from what was pasted', /Cut hosting costs/.test(pastedSummary) && !/Sure, here it is/.test(pastedSummary) && !/Copy this message/.test(pastedSummary))
+  await page.fill('.composer textarea', 'continue')
+  await page.keyboard.press('Enter')
+  await answered()
+  check('the reply builds on the pasted summary', /Picking up from the handoff summary/.test((await page.textContent('.msg.assistant .markdown')) ?? ''))
+  await shot('21-handoff-pasted-chat')
+
+  await page.click('.user-row')
+  await page.click('.modal-nav .side-btn:has-text("Import history")')
+  const importTab = (await page.textContent('.modal-body')) ?? ''
+  check('import settings offer the handoff route before the exports', /No export needed/.test(importTab) && /\/threefolds/.test(importTab) && importTab.indexOf('No export needed') < importTab.indexOf('Claude history'))
+  await shot('22-import-handoff')
+  await page.click('.modal-close')
+
   // ---- dark theme ----
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.click('.side-btn:has-text("New chat")')
@@ -306,9 +459,15 @@ try {
 
   // ---- persistence ----
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
-  check('conversations are saved to disk', saved.length === 7, `${saved.length} saved`)
+  check('conversations are saved to disk', saved.length === 11, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
-  check('every request is written to the spend ledger', ledger.length === 13, `${ledger.length} entries`)
+  check('every request is written to the spend ledger', ledger.length === 19, `${ledger.length} entries`)
+  const summaries = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'handoff')
+  check(
+    'each handoff summary is billed to the provider the chat moved to',
+    summaries.map((entry) => entry.provider).join(',') === 'chatgpt,gemini' && summaries.every((entry) => entry.costUsd > 0),
+    summaries.map((entry) => `${entry.provider}:${entry.costUsd}`).join(','),
+  )
   const providersBilled = new Set(ledger.map((line) => JSON.parse(line).provider))
   check('the reviewed turn is billed under each provider', providersBilled.size === 3, [...providersBilled].join(','))
   check('no API key file was written in demo mode', !fs.existsSync(path.join(dataDir, 'keys.json')))

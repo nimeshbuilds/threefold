@@ -2,7 +2,7 @@
 // window's working copy plus what is streaming right now.
 
 import { create } from 'zustand'
-import { PROVIDERS } from '@shared/types'
+import { IMAGE_PROVIDERS, PROVIDERS } from '@shared/types'
 import type {
   Attachment,
   ChatEvent,
@@ -10,6 +10,7 @@ import type {
   Conversation,
   ConversationMeta,
   Effort,
+  HandoffProgress,
   KeyStatus,
   ModelOption,
   ModelRef,
@@ -23,6 +24,8 @@ import type {
 } from '@shared/types'
 import type { Artifact } from '@shared/artifacts'
 import { DEFAULT_MODEL } from '@shared/pricing'
+import { planFallback, type FallbackPlan } from '@shared/fallback'
+import { MODE_NAME } from './lib/format'
 
 const api = window.threefold
 
@@ -49,6 +52,8 @@ export interface Draft {
   projectId?: string
   tools: ChatTools
   effort: Effort
+  /** Keep the next chat on this provider even when its credit is running low. */
+  noFallback?: boolean
 }
 
 const emptyDraft = (): Draft => ({
@@ -85,6 +90,8 @@ interface State {
   metas: ConversationMeta[]
   conversation: Conversation | null
   streaming: Record<string, Streaming>
+  /** Chats that are being moved to another provider right now, keyed by the chat being left. */
+  handoffs: Record<string, HandoffProgress>
   draft: Draft
   /** Reviewers chosen for the next Threefold chat. */
   reviewers: ModelRef[]
@@ -96,11 +103,11 @@ interface State {
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
   artifact: Artifact | null
-  modal: 'settings' | 'onboarding' | null
+  modal: 'settings' | 'onboarding' | 'handoff' | null
   settingsTab: SettingsTab
   toast: { text: string; tone: 'info' | 'error' } | null
-  /** Text to put back in the composer (after "Edit"). */
-  composerSeed: { text: string; attachments: Attachment[]; truncateFrom: string } | null
+  /** Text to put back in the composer (after "Edit", or when a handoff was stopped). */
+  composerSeed: { text: string; attachments: Attachment[]; truncateFrom?: string } | null
 
   init(): Promise<void>
   setMode(mode: Provider): void
@@ -110,6 +117,13 @@ interface State {
   openConversation(id: string): Promise<void>
   send(text: string, attachments: Attachment[], truncateFrom?: string, research?: boolean): Promise<boolean>
   setResearchNext(on: boolean): void
+  /** Writes a handoff summary of the open chat and continues it with another provider. */
+  handoffTo(to: Provider): Promise<void>
+  /** Starts a chat in the current mode from a handoff summary written in another app. */
+  startFromHandoff(text: string): Promise<boolean>
+  /** Keep the open chat (or the next new one) on its provider even when credit runs low. */
+  setNoFallback(on: boolean): Promise<void>
+  openHandoffModal(): void
   stop(): void
   regenerate(): void
   editLast(): void
@@ -140,6 +154,21 @@ export function activeModel(state: Pick<State, 'conversation' | 'settings' | 'mo
   return state.conversation?.model ?? state.settings?.defaultModel[state.mode] ?? DEFAULT_MODEL[state.mode]
 }
 
+/** Where the next message in the open chat (or the next new chat) will go, given how much credit is left. */
+export function fallbackPlan(
+  state: Pick<State, 'settings' | 'spend' | 'keys' | 'mode' | 'conversation' | 'draft' | 'view'>,
+): FallbackPlan {
+  if (!state.settings || !state.spend || state.view.kind !== 'chat') return { kind: 'none' }
+  const conversation = state.conversation
+  if (conversation ? conversation.panel || conversation.noFallback : state.draft.noFallback) return { kind: 'none' }
+  return planFallback({
+    fallback: state.settings.fallback,
+    spend: state.spend,
+    connected: connectedProviders(state.keys),
+    from: conversation?.provider ?? state.mode,
+  })
+}
+
 /** The reviewers in effect: the open chat's, or the selection for the next one. */
 export function activeReviewers(state: Pick<State, 'conversation' | 'reviewers'>): ModelRef[] {
   return state.conversation?.panel ? (state.conversation.reviewers ?? []) : state.reviewers
@@ -154,6 +183,7 @@ export const useApp = create<State>((set, get) => ({
   metas: [],
   conversation: null,
   streaming: {},
+  handoffs: {},
   draft: emptyDraft(),
   reviewers: [],
   panelNoticeRead: false,
@@ -278,16 +308,30 @@ export const useApp = create<State>((set, get) => ({
     }
     if (!conversation) {
       // The chat is created on the first message, so abandoned drafts leave nothing behind.
-      const model = state.settings?.defaultModel[state.mode] ?? DEFAULT_MODEL[state.mode]
       const isPanel = state.view.kind === 'threefold'
+      // A new chat has no history to hand over, so when this provider's credit is
+      // nearly used up it simply starts with the provider that has credit to spare.
+      const plan = fallbackPlan(state)
+      const mode = plan.kind === 'switch' ? plan.to : state.mode
+      if (plan.kind === 'switch') {
+        set({ mode })
+        void api.settings.update({ lastProvider: mode })
+        state.notify(
+          `${MODE_NAME[state.mode]} credit is ${Math.round(plan.usedPct)}% used, so this chat started in ${MODE_NAME[mode]}.`,
+        )
+      }
+      const model = state.settings?.defaultModel[mode] ?? DEFAULT_MODEL[mode]
+      const tools = { ...state.draft.tools, imageGen: state.draft.tools.imageGen && IMAGE_PROVIDERS.includes(mode) }
       conversation = await api.conversations.create({
-        provider: state.mode,
-        projectId: isPanel ? undefined : state.draft.projectId,
+        provider: mode,
+        // A project belongs to one provider, so it does not follow the chat to another.
+        projectId: isPanel || mode !== state.mode ? undefined : state.draft.projectId,
         model,
         ...(isPanel ? { reviewers: state.reviewers } : {}),
       })
-      await api.conversations.update(conversation.id, { tools: state.draft.tools, effort: state.draft.effort })
-      conversation = { ...conversation, tools: state.draft.tools, effort: state.draft.effort }
+      const noFallback = state.draft.noFallback ? { noFallback: true } : {}
+      await api.conversations.update(conversation.id, { tools, effort: state.draft.effort, ...noFallback })
+      conversation = { ...conversation, tools, effort: state.draft.effort, ...noFallback }
       set({ conversation })
     } else if (truncateFrom) {
       const index = conversation.messages.findIndex((m) => m.id === truncateFrom)
@@ -309,6 +353,38 @@ export const useApp = create<State>((set, get) => ({
     }
     set({ researchNext: false })
     return true
+  },
+
+  async handoffTo(to) {
+    const conversation = get().conversation
+    if (!conversation) return
+    const result = await api.chat.handoff(conversation.id, to)
+    if (!result.ok) get().notify(result.error ?? 'The chat could not be handed off.', 'error')
+  },
+
+  async startFromHandoff(text) {
+    const conversation = await api.conversations.fromHandoff({ provider: get().mode, text })
+    if (!conversation) {
+      get().notify('Paste a handoff summary first.', 'error')
+      return false
+    }
+    set({ conversation, view: { kind: 'chat' }, artifact: null, modal: null, composerSeed: null, draft: emptyDraft() })
+    await get().refreshMetas()
+    return true
+  },
+
+  async setNoFallback(on) {
+    const { conversation, draft } = get()
+    if (conversation) {
+      set({ conversation: { ...conversation, noFallback: on || undefined } })
+      await api.conversations.update(conversation.id, { noFallback: on })
+    } else {
+      set({ draft: { ...draft, noFallback: on || undefined } })
+    }
+  },
+
+  openHandoffModal() {
+    set({ modal: 'handoff' })
   },
 
   stop() {
@@ -618,5 +694,49 @@ export function handleChatEvent(event: ChatEvent): void {
     case 'error':
       useApp.getState().notify(event.error, 'error')
       break
+    case 'handoff': {
+      const { handoff } = event
+      if (handoff.status === 'writing') {
+        useApp.setState((state) => ({ handoffs: { ...state.handoffs, [event.conversationId]: handoff } }))
+        break
+      }
+      useApp.setState((state) => {
+        const handoffs = { ...state.handoffs }
+        delete handoffs[event.conversationId]
+        return { handoffs }
+      })
+      const app = useApp.getState()
+      const viewing = app.conversation?.id === event.conversationId
+      const from = MODE_NAME[handoff.from]
+      const to = MODE_NAME[handoff.to]
+      if (handoff.status === 'done' && handoff.conversation) {
+        const next = handoff.conversation
+        // Follow the chat to its new home, unless the user has moved on to something else meanwhile.
+        if (viewing) {
+          useApp.setState({
+            conversation: next,
+            mode: next.provider,
+            view: { kind: 'chat' },
+            artifact: null,
+            composerSeed: null,
+            draft: emptyDraft(),
+          })
+          void api.settings.update({ lastProvider: next.provider })
+        }
+        void app.refreshMetas()
+        app.notify(
+          handoff.reason === 'credit'
+            ? `${from} credit is ${Math.round(handoff.usedPct ?? 0)}% used. This chat continues in ${to}.`
+            : `This chat continues in ${to}.`,
+        )
+      } else if (handoff.status === 'failed') {
+        const why = handoff.error ?? 'The chat could not be moved.'
+        app.notify(handoff.reason === 'credit' ? `${why} Answering in ${from} instead.` : why, 'error')
+      } else if (handoff.status === 'stopped' && viewing && handoff.unsent) {
+        // Give the unsent message back, so stopping does not lose what was typed.
+        useApp.setState({ composerSeed: { text: handoff.unsent.text, attachments: handoff.unsent.attachments } })
+      }
+      break
+    }
   }
 }

@@ -3,6 +3,7 @@ import { handleChatEvent, useApp } from './state'
 import { ArtifactPanel } from './components/ArtifactPanel'
 import { ChatView } from './components/ChatView'
 import { CodeView } from './components/CodeView'
+import { HandoffModal } from './components/Handoff'
 import { Onboarding } from './components/Onboarding'
 import { ProjectView, ProjectsList } from './components/Projects'
 import { SettingsModal } from './components/Settings'
@@ -47,6 +48,7 @@ export function App() {
       else if (command === 'mode-chatgpt') state.setMode('chatgpt')
       else if (command === 'mode-gemini') state.setMode('gemini')
       else if (command === 'threefold') state.openThreefold()
+      else if (command === 'paste-handoff') state.openHandoffModal()
     })
     return () => {
       offChat()
@@ -69,6 +71,7 @@ export function App() {
       <ArtifactPanel />
       {modal === 'settings' && <SettingsModal />}
       {modal === 'onboarding' && <Onboarding />}
+      {modal === 'handoff' && <HandoffModal />}
       {toast && (
         <div className={`toast ${toast.tone}`} role="status">
           {toast.text}

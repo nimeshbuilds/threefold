@@ -26,11 +26,13 @@ const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => v
     get: call('conversations:get'),
     create: call('conversations:create'),
     update: call('conversations:update'),
+    fromHandoff: call('conversations:fromHandoff'),
     remove: call('conversations:remove'),
     search: call('conversations:search'),
   },
   chat: {
     send: call('chat:send'),
+    handoff: call('chat:handoff'),
     stop: call('chat:stop'),
     onEvent: (listener) => subscribe<ChatEvent>('chat:event', listener),
   },
@@ -75,6 +77,7 @@ const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => v
   },
   app: {
     openExternal: call('app:openExternal'),
+    copyText: call('app:copyText'),
     version: call('app:version'),
     platform: process.platform,
   },
