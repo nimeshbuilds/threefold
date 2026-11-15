@@ -131,8 +131,12 @@ export interface ConversationMeta {
  * receiving model reads it as the history of the chat.
  */
 export interface Handoff {
-  /** fallback: written automatically when credit ran low. manual: the user asked. pasted: written in another app. */
-  source: 'fallback' | 'manual' | 'pasted'
+  /**
+   * fallback: written automatically when credit ran low. manual: the user asked.
+   * pasted: written in another app and pasted in. received: written in another app
+   * and passed in by the threefolds skill, which the user then accepted.
+   */
+  source: 'fallback' | 'manual' | 'pasted' | 'received'
   summary: string
   /** Who the conversation was with before, as shown to the user and the model. */
   from?: string
@@ -144,6 +148,50 @@ export interface Handoff {
   /** Automatic fallback only: how much of the monthly credit was used when it happened. */
   usedPct?: number
   createdAt: number
+}
+
+/**
+ * A handoff that reached the app from outside and waits for the user to accept
+ * it. Nothing is created from it, and nothing is sent anywhere, until they do.
+ */
+export interface IncomingHandoff {
+  /**
+   * inbox: a file the threefolds skill saved in Threefold's inbox folder.
+   * clipboard: text the user had copied. none: a link asked Threefold to pick
+   * up a handoff, but none was waiting.
+   */
+  source: 'inbox' | 'clipboard' | 'none'
+  /** Who the link said it came from. macOS does not tell an app who opened a link, so this is a claim, not a fact. */
+  sender?: Provider
+  /** The handoff itself, cut down to its heading and end line. Empty when the source is "none". */
+  summary: string
+  title?: string
+  /** The handoff's own "From" line. */
+  from?: string
+  /** The mode that belongs to the assistant named in the "From" line, when the name is clear. */
+  fromProvider?: Provider
+}
+
+/** A coding tool on this Mac that loads skills from a folder in the home directory. */
+export type SkillTarget = 'claude-code' | 'codex' | 'gemini-cli'
+export const SKILL_TARGETS: SkillTarget[] = ['claude-code', 'codex', 'gemini-cli']
+
+export function isSkillTarget(value: unknown): value is SkillTarget {
+  return value === 'claude-code' || value === 'codex' || value === 'gemini-cli'
+}
+
+export interface SkillStatus {
+  target: SkillTarget
+  /** The tool's own folder is in the home directory, so the tool has been used on this Mac. */
+  toolFound: boolean
+  /**
+   * missing: not installed. current: the same text this version of Threefold ships.
+   * outdated: an older or edited copy. linked: a link to a folder somewhere else,
+   * which Threefold leaves alone. foreign: a different skill that happens to have this name.
+   */
+  state: 'missing' | 'current' | 'outdated' | 'linked' | 'foreign'
+  /** Where the skill file is, or would be, with the home folder written as "~". */
+  path: string
 }
 
 export interface Conversation extends ConversationMeta {
@@ -461,8 +509,11 @@ export interface ThreefoldApi {
         Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers' | 'noFallback'>
       >,
     ): Promise<ConversationMeta | null>
-    /** Starts a chat from a handoff summary written elsewhere. Null when the text is empty. */
-    fromHandoff(input: { provider: Provider; text: string }): Promise<Conversation | null>
+    /**
+     * Starts a chat from a handoff summary written elsewhere. Null when the text is empty.
+     * `received` marks one that the threefolds skill passed in, as opposed to one pasted by hand.
+     */
+    fromHandoff(input: { provider: Provider; text: string; received?: boolean }): Promise<Conversation | null>
     remove(id: string): Promise<void>
     search(query: string, provider: Provider): Promise<ConversationMeta[]>
   }
@@ -472,6 +523,25 @@ export interface ThreefoldApi {
     handoff(conversationId: string, to: Provider): Promise<{ ok: boolean; error?: string }>
     stop(conversationId: string): Promise<void>
     onEvent(listener: (event: ChatEvent) => void): () => void
+  }
+  handoff: {
+    /**
+     * Hands over the handoff that is waiting, once. Also looks in the inbox folder, so a
+     * handoff that was saved while the link could not be opened is still found.
+     */
+    take(): Promise<IncomingHandoff | null>
+    /** Called when a handoff arrives while the window is open. Fetch it with take(). */
+    onIncoming(listener: () => void): () => void
+  }
+  skill: {
+    /** Where the threefolds skill stands in each coding tool on this Mac. */
+    status(): Promise<SkillStatus[]>
+    /** Writes the skill file into the tool's skills folder, replacing an older copy of it. */
+    install(target: SkillTarget): Promise<{ ok: boolean; error?: string }>
+    /** Takes the skill out of the tool's skills folder again. */
+    remove(target: SkillTarget): Promise<{ ok: boolean; error?: string }>
+    /** Saves the skill as a ZIP in Downloads, for the apps that take an upload, and shows it in Finder. */
+    saveZip(): Promise<{ ok: boolean; file?: string; error?: string }>
   }
   attachments: {
     pick(): Promise<Attachment[]>

@@ -84,82 +84,65 @@ A summary carries the gist of a conversation, not every word, and the model you 
 
 The same summary works in the other direction: from the official apps into Threefold, with no export and no import.
 
-`threefolds` is a skill for the official Claude, ChatGPT and Gemini apps. It is one text file of instructions ([skills/threefolds/SKILL.md](skills/threefolds/SKILL.md)) with no code in it. Run it in any existing conversation and the assistant writes a handoff summary of that conversation. Paste the summary into Threefold (**File → Continue from a Handoff…**, or the link under the message box of a new chat) and carry on in whichever mode you like.
+`threefolds` is a skill for Claude, ChatGPT and Gemini: their chat apps and their coding tools (Claude Code, Codex, Gemini CLI). It is one text file of instructions ([skills/threefolds/SKILL.md](skills/threefolds/SKILL.md)) with no code in it. It does three things:
 
-Download [threefolds.zip](https://nimeshbuilds.github.io/threefold/skills/threefolds.zip) or the bare [SKILL.md](https://nimeshbuilds.github.io/threefold/skills/threefolds/SKILL.md), then add it to the app:
+- **Writes a handoff.** Run it in any existing conversation and the assistant writes a handoff summary of that conversation.
+- **Passes it to Threefold.** In a coding tool on your Mac, the assistant sees that Threefold is installed and asks whether to pass the handoff in. If you say yes, it saves the handoff as a file in Threefold's inbox folder and opens the app. In a chat app, the reply ends with a link: copy the reply, click the link, and Threefold picks the handoff up from your clipboard.
+- **Installs Threefold when you ask.** See [Option C](#option-c-let-your-coding-assistant-install-it).
+
+![Threefold showing a handoff that was passed in, and asking where to continue](docs/screenshots/incoming.png)
+
+#### Threefold asks before it does anything
+
+A handoff that reaches the app from outside is shown to you in full first: its title, who it says it is from, and how it arrived. Threefold picks the mode that matches the sender (Claude mode for a chat from Claude) and you can pick another, or discard it. No chat exists until you continue, and nothing goes to a provider until you send a message.
+
+- **The link carries nothing.** `threefold://handoff` only tells the app to look for a handoff that is already on your Mac. Anything else put into the link is ignored, and no other `threefold://` link does anything.
+- **Two places are looked at, no others:** Threefold's inbox folder (`~/Library/Application Support/Threefold/inbox`) and your clipboard. Text that is not a Threefold handoff is left alone.
+- **Files are checked.** A file is taken only if it is a plain file that you own, named `handoff-….md`, under 1 MB and less than a day old. Links to other files are never followed.
+- **The sender is a claim.** macOS does not tell an app who opened a link, so Threefold shows what the handoff says about itself, and points out when the link and the summary disagree.
+- **The skill never puts a conversation into a link.** Its instructions say so, and the page a chat app links to ([/open/](https://nimeshbuilds.github.io/threefold/open/)) receives nothing from your chat.
+
+You can always do it by hand instead: copy the summary and paste it into Threefold with **File → Continue from a Handoff…**, or the link under the message box of a new chat.
+
+#### Install the skill
+
+**From inside Threefold (easiest).** Open **Settings → Handoff skill** and click **Install** next to Claude Code, Codex or Gemini CLI. Threefold writes the one skill file into that tool's skills folder, shows you where, and can remove it again. The same tab saves the ZIP for the Claude app, copies the message that creates the skill in ChatGPT and Gemini, and lists commands to try.
+
+![The Handoff skill tab in Settings](docs/screenshots/skill.png)
+
+**Straight from GitHub**, with no file to download or unzip:
+
+| Tool | Install | Run |
+|---|---|---|
+| Claude Code | `mkdir -p ~/.claude/skills/threefolds && curl -fsSL https://raw.githubusercontent.com/nimeshbuilds/threefold/main/skills/threefolds/SKILL.md -o ~/.claude/skills/threefolds/SKILL.md` | `/threefolds` |
+| Codex | Ask Codex: `$skill-installer install the skill at https://github.com/nimeshbuilds/threefold/tree/main/skills/threefolds`. Or: `mkdir -p ~/.agents/skills/threefolds && curl -fsSL https://raw.githubusercontent.com/nimeshbuilds/threefold/main/skills/threefolds/SKILL.md -o ~/.agents/skills/threefolds/SKILL.md`, then restart Codex. | `$threefolds` |
+| Gemini CLI | `gemini skills install https://github.com/nimeshbuilds/threefold.git --path skills/threefolds` | Ask it to "use the threefolds skill" |
+
+**In the chat apps**, skills live in your account, so they are added there:
 
 | App | Where to add it | How to run it | Who has Skills |
 |---|---|---|---|
-| Claude | Turn on **Code execution and file creation** in Settings → Capabilities. Then **Customize → Skills → + → + Create skill → Upload a skill**, and choose the ZIP. | Type `/threefolds` or ask Claude to "use the threefolds skill" | Every plan, including Free. On Team and Enterprise an owner has to allow them. [Guide](https://support.claude.com/en/articles/12512180) |
-| ChatGPT | Sidebar → **Plugins** → **Skills** tab → **Create → Upload from your computer**. ChatGPT scans a skill before it becomes available. | Ask ChatGPT to "use the threefolds skill" | Business, Enterprise, Healthcare and Edu workspaces, where the admin allows uploads. Not personal plans. [Guide](https://help.openai.com/en/articles/20001066) |
-| Gemini | On the web or the Mac app: **Customize** (it may be under More) → **Skills** → **Create → Upload**, and select `SKILL.md`. | Type `/` (or `@` with the newer shortcut) and pick threefolds | Personal Google accounts, age 18 or over. [Guide](https://support.google.com/gemini/answer/17094296) |
+| Claude | Only by uploading a ZIP; there is no way to add a skill from a link. Get [threefolds.zip](https://nimeshbuilds.github.io/threefold/skills/threefolds.zip) (or **Save the ZIP** in Threefold), turn on **Code execution and file creation** in Settings → Capabilities, then **Customize → Skills → + → + Create skill → Upload a skill**. | Type `/threefolds` or ask Claude to "use the threefolds skill" | Every plan, including Free. On Team and Enterprise an owner has to allow them. [Guide](https://support.claude.com/en/articles/12512180) |
+| ChatGPT | Paste the install message (the **Copy the install message** button in Threefold or on the website) into a chat, or upload the ZIP under Sidebar → **Plugins** → **Skills** → **Create**. ChatGPT scans a skill before it becomes available. | Ask ChatGPT to "use the threefolds skill" | Business, Enterprise, Healthcare and Edu workspaces, where the admin allows it. Not personal plans. [Guide](https://help.openai.com/en/articles/20001066) |
+| Gemini | Paste the install message into a new chat, review what Gemini shows and click **Create**. Or upload [SKILL.md](https://nimeshbuilds.github.io/threefold/skills/threefolds/SKILL.md) under **Customize → Skills → Create → Upload**. | Type `/` (or `@` with the newer shortcut) and pick threefolds | Personal Google accounts, age 18 or over. [Guide](https://support.google.com/gemini/answer/17094296) |
 
-**No Skills on your plan?** The skill's text also works as a plain prompt. Threefold has a **Copy the prompt** button (in the handoff dialog and in Settings → Import history), and the [website](https://nimeshbuilds.github.io/threefold/#handoff) shows it too. Paste it as a message at the end of the conversation you want to move.
+**No Skills on your plan?** The skill's text also works as a plain prompt. Threefold has a **Copy the prompt** button (in the handoff dialog, in Settings → Import history and in Settings → Handoff skill), and the [website](https://nimeshbuilds.github.io/threefold/#handoff) shows it too. Paste it as a message at the end of the conversation you want to move.
 
-Read a handoff before you paste it anywhere: it is a summary of your conversation, so it can contain whatever you discussed. The skill tells the assistant to leave out passwords, keys and card numbers. A pasted summary costs nothing until you send a message; it then goes to that mode's API as background, billed as input tokens.
+#### Things to try
 
-### Coding on your subscription first
+| Type this | Where | What happens |
+|---|---|---|
+| `/threefolds` | Claude Code, the Claude app, the Gemini app | A handoff summary of the whole chat |
+| `/threefolds and open it in Threefold` | Claude Code | The handoff is written and passed straight in. You are asked before anything opens. |
+| `$threefolds then pass it to Threefold` | Codex | The same in Codex, where skills start with a dollar sign |
+| `Use the threefolds skill. Keep the latest draft in full.` | Any assistant | Plain words work everywhere, and you can say what must not be shortened |
+| `/threefolds install Threefold` | Claude Code, Codex, Gemini CLI | Installs or updates the app, after asking |
 
-A Claude or ChatGPT subscription already covers coding in the maker's own command-line tool: Claude Code for Claude, Codex for ChatGPT. In the Code tab, **Use subscription** lets a coding session spend that first and your API credits only afterwards.
-
-- **Your plan is used first.** With the switch on, a new coding session in Claude mode runs through Claude Code, and one in ChatGPT mode through Codex, signed in with your own account.
-- **Your API key takes over when the plan runs out.** When the plan's usage limit is reached, Threefold carries on in the same session, with the same tool, on your API key, and says so in the transcript. It remembers when the limit resets and goes back to the plan after that.
-- **Every turn says what paid for it.** A turn on your plan ends with "Ran on your Claude plan · not billed to your API key". A turn on the key ends with its cost, which also counts on the meter and in the spend ledger. Work on a plan is never counted as API spend.
-
-![A coding session that ran on the plan, reached its limit, and carried on with the API key](docs/screenshots/subscription.png)
-
-**Setting it up is one click, inside the app.** The panel behind **Use subscription** has one button, and it does whatever is still missing, in order. Nothing needs a terminal.
-
-1. **Installs the tool** if it is not on your Mac, with its maker's own installer. A copy that is too old is updated the same way it was installed (`brew upgrade`, `npm install -g …@latest` or the tool's own `update` command); if Homebrew or npm cannot be found, the maker's installer is used instead. The exact command is shown.
-2. **Signs you in.** It starts the tool's own sign-in, which opens Anthropic's or OpenAI's page in your browser. Approve it there and the app carries on by itself. If the page shows a code instead, there is a box to paste it into, and a button that opens the page again.
-3. **Switches it on.**
-
-A newer version of a tool that already works is offered as an optional update.
-
-**If the sign-in runs out later,** the session says so and shows a **Sign in** button right there. With an API key saved, the turn carries on with the key in the meantime. Without one, signing in sends the same request again by itself.
-
-**What Threefold does and does not do here**
-
-- It runs the tool that is installed on your Mac, exactly as its maker publishes it, in the tool's documented non-interactive mode (`claude -p` and `codex exec`). It does not modify, wrap or replace it.
-- It never sees, stores or passes on your password or any sign-in token. The tool keeps its own sign-in, the same one it uses in your terminal.
-- A run on your plan gets no API key, not even one that happens to be in your environment. A run on your API key is given the key for that run only (`ANTHROPIC_API_KEY` or `CODEX_API_KEY`); your tool's saved sign-in is not changed.
-- With Claude Code, you are still asked before every file edit and every command. Claude Code sends each question to Threefold, which shows the usual "Allow this?" card.
-- **Codex is different:** run this way it does not ask before each step. It works in its own sandbox, in which it can change files inside the project folder and nowhere else, and has no network access. The app says so when a session starts.
-- On your plan the tool picks its own model. When your API key pays, the session's model is used, so the price is known.
-
-Your plan's own terms and limits apply. Anthropic's rules for products that run Claude Code allow each user to sign in to the unmodified tool with their own subscription, and do not allow an app to offer the Claude sign-in itself or to handle the credentials; this feature is built to that shape. See [Anthropic's page](https://code.claude.com/docs/en/legal-and-compliance) and [OpenAI's Codex documentation](https://developers.openai.com/codex/noninteractive). Gemini mode has no subscription route.
-
-### What each API offers, and what Threefold uses
-
-Checked against each provider's documentation and SDK in November 2026.
-
-| Capability | Anthropic | OpenAI | Google | In Threefold |
-|---|---|---|---|---|
-| Web search | Yes | Yes | Yes | All three modes |
-| Open and read a web page | Web fetch | Part of web search | URL context | All three modes, with web search |
-| Code execution sandbox | Yes | Code interpreter | Yes | All three modes |
-| Deep research | No endpoint; done with the chat model | No dedicated model any more; done with a reasoning model in background mode | Deep Research agent | All three modes, and Threefold review |
-| Image generation | No | Yes | Yes (Nano Banana) | ChatGPT and Gemini modes |
-| Memory | Memory tool | No built-in | No built-in | Threefold's own, shared by every mode |
-| Remote MCP connectors | Yes | Yes | Yes | Not yet |
-| File search over uploaded documents | No | Yes | Yes | Not yet (projects send files directly) |
-| Office file creation (slides, sheets) | Agent Skills | Through code interpreter | Through code execution | Not yet |
-| Computer or browser use | Yes | Yes | Yes | No |
-| Voice, live audio | No | Realtime | Live | No |
-| Video and music generation | No | Yes | Yes | No |
-
-### Cost, live
-
-- Every reply shows its cost under it, with the model and token counts.
-- The top bar shows the running total for the open chat. It ticks up while the reply streams (marked "≈") and settles to the exact figure when the API reports the final token counts.
-- The sidebar shows this billing cycle's spend against your monthly credit grant, and how many days until it renews.
-- Settings → Spend breaks it down by model and by day, per provider.
-
-![The spend breakdown](docs/screenshots/spend.png)
+Read a handoff before you continue with it: it is a summary of your conversation, so it can contain whatever you discussed. The skill tells the assistant to leave out passwords, keys and card numbers. A handoff costs nothing until you send a message; it then goes to that mode's API as background, billed as input tokens.
 
 ## Quick start
 
-There are two ways to get Threefold onto your Mac. Download the ready-made app, or build it from this source.
+There are three ways to get Threefold onto your Mac. Download the ready-made app, build it from this source, or let a coding assistant you already use install it.
 
 ### Option A: download the app
 
@@ -220,6 +203,22 @@ You need macOS 13 or later, Git, Node.js 22 or later and pnpm 10.
    ```
 
 5. Optional: build an app you can keep in Applications. See [Build a Mac app](#build-a-mac-app).
+
+### Option C: let your coding assistant install it
+
+If you use Claude Code, Codex or Gemini CLI, [add the `threefolds` skill](#install-the-skill) and ask for it in a session:
+
+```
+/threefolds install Threefold
+```
+
+The assistant checks that your Mac can run the app (Apple Silicon, macOS 13 or later), tells you that the app is not signed by Apple, and waits for your yes. Then it downloads the app and its checksum from this repository's latest release, checks one against the other, checks that the app's seal is intact and that it is Threefold, puts it in Applications and opens it. Asking again later brings a newer version in; the old copy goes to the Trash, and your chats and keys are kept.
+
+The skill forbids the assistant to use `sudo`, to ask for your password, to change any macOS security setting, to remove the quarantine flag from a file, or to touch your API keys.
+
+> **What you should know.** An app fetched this way is not marked as "downloaded from the internet", so macOS does not show the warning from Option A. You are relying on this project instead of on Apple's check. Say yes only if you trust it: the source is here, and the skill's full text is [skills/threefolds/SKILL.md](skills/threefolds/SKILL.md).
+
+In a chat app that cannot run commands on your Mac, the same request gets you a link to the quick start instead.
 
 ## Setup
 
@@ -291,7 +290,7 @@ To make the ZIP that is attached to a release:
 pnpm release:zip
 ```
 
-That builds the app, signs it ad hoc (a local signature with no Apple identity, which keeps macOS from reporting a downloaded copy as damaged), checks the signature and writes `dist/Threefold-mac-arm64.zip` with its SHA-256. The result is still not notarized, so anyone who downloads it has to follow the steps in [Option A](#option-a-download-the-app).
+That builds the app, signs it ad hoc (a local signature with no Apple identity, which keeps macOS from reporting a downloaded copy as damaged), checks the signature and writes `dist/Threefold-mac-arm64.zip` and `dist/Threefold-mac-arm64.zip.sha256`. Attach both to the release under exactly those names: the website links to the first, and the `threefolds` skill downloads both and checks one against the other. The result is still not notarized, so anyone who downloads it in a browser has to follow the steps in [Option A](#option-a-download-the-app).
 
 ## How cost is calculated
 
@@ -318,6 +317,8 @@ Things to know:
 - Each provider's normal API data policies apply; note that Google may use free-tier (unbilled) Gemini API content to improve its products.
 - In a Threefold review, your message and the draft answer are sent to every reviewer's provider.
 - When a chat moves to another provider, by automatic fallback or because you handed it off, the conversation so far is sent to that provider so it can write the handoff summary. Fallback is off until you switch it on.
+- A handoff passed in from another app is never acted on by itself. The `threefold://handoff` link carries no content; Threefold looks only in its own inbox folder and on the clipboard, keeps only text that is a Threefold handoff, shows it to you with what it claims about its sender, and waits. See [Threefold asks before it does anything](#threefold-asks-before-it-does-anything).
+- Installing the `threefolds` skill from Settings writes one text file into a coding tool's skills folder under your home folder, and nothing else. Threefold does not write over a skill of the same name that it did not install, or one that is a link to another folder.
 - The window runs sandboxed with context isolation. Pages the model writes are previewed in a sandboxed frame with no access to the app.
 - The coding agents can read the project folder you choose. They ask before every file edit and every shell command, and Threefold's own agents cannot touch paths outside that folder. The one exception is Codex on your ChatGPT subscription, which does not ask: it works in its own sandbox, limited to the project folder and without network access.
 - With "Use subscription" on, coding runs through the Claude Code or Codex CLI installed on your Mac. Threefold never reads their sign-in. Installing or updating a CLI from the app runs its maker's own command, shown first, and looking up the newest version asks the npm registry for the package's version number and nothing else.
@@ -346,21 +347,23 @@ pnpm test:e2e
 | `src/main/code/permissionBridge.ts` | How Claude Code asks you before each edit or command when Threefold runs it |
 | `src/main/importers.ts` | Parsers for the ChatGPT, Claude and Gemini exports |
 | `src/main/handoff.ts`, `src/shared/handoff.ts` | Writing, reading and passing on handoff summaries |
+| `src/main/incoming.ts` | Receiving a handoff from outside: the `threefold://handoff` link, the inbox folder and the clipboard |
+| `src/main/skillInstall.ts` | Installing the `threefolds` skill for Claude Code, Codex and Gemini CLI, and the ZIP for the chat apps |
 | `src/shared/fallback.ts` | Deciding when a chat moves to another provider |
 | `skills/threefolds/` | The `threefolds` skill; `pnpm skill` publishes it to `docs/skills/` |
 | `src/main/store.ts` | Local JSON storage and the spend ledger |
 | `src/shared/pricing.ts` | Price table and cost maths |
 | `src/renderer/` | The React interface |
 | `tests/live/` | Checks against the real APIs (run by hand, see below) |
-| `docs/` | The website, served by GitHub Pages |
+| `docs/` | The website, served by GitHub Pages. `docs/open/` is the page a chat app's handoff links to |
 | `brand/` | Logo, icon and the brand guide |
 
 ## What has and has not been tested
 
 **Tested automatically, with no API key:**
 
-- 188 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, automatic fallback (when it switches, where to, what is billed, what happens when the summary fails or is stopped), handoff summaries and the published skill files, coding on a subscription (finding, updating and signing in to the CLIs, plan-first runs, permission prompts, falling back to the API key in the same session, what is billed), storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
-- 130 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, coding on a subscription (updating the CLI, signing in, a run on the plan, the limit and the switch to the API key), automatic fallback, manual handoff, pasting a handoff, projects, memory, spend, dark theme and what is written to disk.
+- 222 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, automatic fallback (when it switches, where to, what is billed, what happens when the summary fails or is stopped), handoff summaries and the published skill files, receiving a handoff from outside (which links are listened to, which files are taken from the inbox, what is never read, followed or deleted, and what the window is given), installing and removing the skill in a stand-in home folder, the skill's own rules for passing a handoff on and for installing the app, coding on a subscription (finding, updating and signing in to the CLIs, plan-first runs, permission prompts, falling back to the API key in the same session, what is billed), storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
+- 155 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, coding on a subscription (updating the CLI, signing in, a run on the plan, the limit and the switch to the API key), automatic fallback, manual handoff, pasting a handoff, a handoff passed in through the inbox folder and through the clipboard (shown first, never acted on, routed to the sender's mode, discarded on request), links that must be ignored, installing the skill from Settings, projects, memory, spend, dark theme and what is written to disk.
 
 **Not run against the real APIs by the automated tests.** The provider code is written against the official SDK type definitions and documentation and compiles against them. A live suite is ready for checking it with your own keys:
 
@@ -378,7 +381,15 @@ pnpm test:subscription
 
 It needs you at the keyboard: when a tool is not signed in, the app opens its maker's sign-in page and you approve it in your browser. It uses no API key and sends one small prompt to each plan.
 
-Deep research is left out of that run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
+To check that macOS itself delivers a `threefold://handoff` link to the packaged app, once while it is running and once when the link has to start it:
+
+```bash
+pnpm test:link
+```
+
+It runs in demo mode on a throwaway profile, with no keys and no network.
+
+Deep research is left out of the live API run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
 
 Also not verified: the Gemini importer against a real Takeout file (it is tested against Google's documented record shape and folder layout), the first-launch macOS warning on a freshly downloaded copy of the release, and the three coding agents against real projects.
 
@@ -389,7 +400,12 @@ Coding on a subscription, checked against the real tools on a real Mac, in the r
 - **Also seen for real:** how Claude Code reports a sign-in that has run out, and that Threefold names it and offers to sign in again.
 - **Not yet checked for real:** a real usage-limit message from either tool, so the switch to the API key has only been exercised with stand-ins; installing or updating a tool from the app; and a Codex sign-in from the app, since Codex was already signed in. Those paths are covered by stand-ins that play the two tools, written from their documented output and corrected against what the real tools printed.
 
-Not verified for fallback and handoff: a summary written by a real model (the tests use stand-in providers, so the quality of real summaries is untested), and uploading the `threefolds` skill inside the official Claude, ChatGPT and Gemini apps. The install steps follow each company's help pages as they read in November 2026; the skill has not been run inside those apps.
+Passing a handoff in and installing the skill, checked for real on a real Mac:
+
+- **macOS delivers the link.** With the packaged app, `open "threefold://handoff?from=…"` reached the running app, and started the app when it was closed; both times the handoff from the inbox folder was shown with the sender's mode preselected. Other `threefold://` links did nothing.
+- **Codex and Gemini CLI find the skill** in the folders Threefold installs it to. Checked with Codex 0.156.1 (`~/.agents/skills`, which also showed its built-in `skill-installer`) and Gemini CLI 0.59.0 (`~/.gemini/skills`), on a stand-in home folder and without calling a model. Claude Code reads `~/.claude/skills` the same way.
+
+Not verified: the skill's install steps against a published release, and `gemini skills install` with this repository's address; the skill run by a real model in any assistant, so whether each assistant follows the "pass it on" and "install" instructions exactly as written is untested; a summary written by a real model (the tests use stand-in providers); Codex's `$skill-installer` with this repository; creating the skill from the install message in the Gemini and ChatGPT apps; uploading the ZIP inside the Claude app; and the browser's own "open Threefold?" prompt on the website's handoff page. The steps for the official apps follow each company's help pages as they read in November 2026.
 
 ## Licence
 

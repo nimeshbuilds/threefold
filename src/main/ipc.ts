@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, app, clipboard, dialog, ipcMain, shell } from 'electron'
-import { isCliProvider, isProvider } from '@shared/types'
+import { isCliProvider, isProvider, isSkillTarget } from '@shared/types'
 import type {
   Attachment,
   CliProvider,
@@ -16,6 +16,7 @@ import type {
   Provider,
   SendRequest,
   Settings,
+  SkillTarget,
 } from '@shared/types'
 import { MODELS } from '@shared/pricing'
 import { parseHandoff } from '@shared/handoff'
@@ -23,10 +24,12 @@ import { ChatService, DEMO } from './chat'
 import type { CliManager } from './code/cli'
 import { CodeService } from './code/service'
 import { importExport } from './importService'
+import type { IncomingHandoffs } from './incoming'
 import { claudeErrorMessage, verifyClaudeKey } from './providers/anthropic'
 import { geminiErrorMessage, verifyGeminiKey } from './providers/gemini'
 import { openaiErrorMessage, verifyOpenAIKey } from './providers/openai'
 import type { Secrets } from './secrets'
+import { installSkill, removeSkill, saveSkillZip, skillStatuses } from './skillInstall'
 import type { Store } from './store'
 
 export interface IpcDeps {
@@ -35,6 +38,7 @@ export interface IpcDeps {
   chat: ChatService
   code: CodeService
   cli: CliManager
+  incoming: IncomingHandoffs
   artifacts: Map<string, string>
   window: () => BrowserWindow | null
 }
@@ -70,7 +74,7 @@ function cleanReviewers(value: unknown): ModelRef[] {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { store, secrets, chat, code, cli, artifacts } = deps
+  const { store, secrets, chat, code, cli, incoming, artifacts } = deps
   const modelsCache = path.join(store.dir, 'available-models.json')
 
   const readAvailable = (): Partial<Record<Provider, string[]>> => {
@@ -181,12 +185,17 @@ export function registerIpc(deps: IpcDeps): void {
       return store.saveConversation(conversation)
     },
   )
-  handle('conversations:fromHandoff', (input: { provider: Provider; text: string }) => {
+  handle('conversations:fromHandoff', (input: { provider: Provider; text: string; received?: boolean }) => {
     const parsed = parseHandoff(String(input?.text ?? ''))
     if (!parsed || !isProvider(input?.provider)) return null
     const conversation = store.createConversation(input.provider, store.getSettings().defaultModel[input.provider])
     conversation.title = parsed.title ?? 'Continued chat'
-    conversation.handoff = { source: 'pasted', summary: parsed.summary, from: parsed.from, createdAt: Date.now() }
+    conversation.handoff = {
+      source: input.received === true ? 'received' : 'pasted',
+      summary: parsed.summary,
+      from: parsed.from,
+      createdAt: Date.now(),
+    }
     store.saveConversation(conversation)
     return conversation
   })
@@ -203,6 +212,20 @@ export function registerIpc(deps: IpcDeps): void {
     isProvider(to) ? chat.handoff(String(conversationId), to) : { ok: false, error: 'Unknown provider.' },
   )
   handle('chat:stop', (conversationId: string) => chat.stop(conversationId))
+
+  // ---------- handoffs from outside, and the skill that sends them ----------
+
+  handle('handoff:take', () => incoming.take())
+
+  const notTarget = { ok: false, error: 'Unknown tool.' }
+  handle('skill:status', () => skillStatuses())
+  handle('skill:install', (target: SkillTarget) => (isSkillTarget(target) ? installSkill(target) : notTarget))
+  handle('skill:remove', (target: SkillTarget) => (isSkillTarget(target) ? removeSkill(target) : notTarget))
+  handle('skill:saveZip', () => {
+    const saved = saveSkillZip(process.env.THREEFOLD_SKILL_HOME ? path.resolve(process.env.THREEFOLD_SKILL_HOME) : app.getPath('downloads'))
+    if (saved.ok && saved.file && !DEMO) shell.showItemInFolder(saved.file)
+    return saved.ok && saved.file ? { ok: true, file: path.basename(saved.file) } : saved
+  })
 
   // ---------- attachments ----------
 

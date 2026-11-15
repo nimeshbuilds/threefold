@@ -33,4 +33,7 @@ run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, zip])
 
 const digest = createHash('sha256').update(fs.readFileSync(zip)).digest('hex')
 const megabytes = (fs.statSync(zip).size / 1_000_000).toFixed(1)
-console.log(`\n${path.relative(root, zip)}  ${megabytes} MB\nSHA-256  ${digest}`)
+// The checksum as a file, in the form `shasum -a 256 -c` reads. It is attached to the
+// release beside the ZIP: the threefolds skill downloads both and checks one against the other.
+fs.writeFileSync(`${zip}.sha256`, `${digest}  ${path.basename(zip)}\n`)
+console.log(`\n${path.relative(root, zip)}  ${megabytes} MB\nSHA-256  ${digest}\n${path.relative(root, zip)}.sha256 written`)

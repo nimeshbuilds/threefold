@@ -3,7 +3,7 @@ import { handleChatEvent, useApp } from './state'
 import { ArtifactPanel } from './components/ArtifactPanel'
 import { ChatView } from './components/ChatView'
 import { CodeView } from './components/CodeView'
-import { HandoffModal } from './components/Handoff'
+import { HandoffModal, IncomingHandoffModal } from './components/Handoff'
 import { Onboarding } from './components/Onboarding'
 import { ProjectView, ProjectsList } from './components/Projects'
 import { SettingsModal } from './components/Settings'
@@ -51,10 +51,12 @@ export function App() {
       else if (command === 'threefold') state.openThreefold()
       else if (command === 'paste-handoff') state.openHandoffModal()
     })
+    const offIncoming = api.handoff.onIncoming(() => void useApp.getState().checkIncoming())
     return () => {
       offChat()
       offUsage()
       offMenu()
+      offIncoming()
     }
   }, [])
 
@@ -73,6 +75,7 @@ export function App() {
       {modal === 'settings' && <SettingsModal />}
       {modal === 'onboarding' && <Onboarding />}
       {modal === 'handoff' && <HandoffModal />}
+      {modal === 'incoming' && <IncomingHandoffModal />}
       {modal === 'subscription' && <SubscriptionPanel />}
       {toast && (
         <div className={`toast ${toast.tone}`} role="status">

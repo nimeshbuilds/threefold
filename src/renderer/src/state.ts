@@ -11,6 +11,7 @@ import type {
   ConversationMeta,
   Effort,
   HandoffProgress,
+  IncomingHandoff,
   KeyStatus,
   ModelOption,
   ModelRef,
@@ -46,7 +47,7 @@ export type View =
   | { kind: 'projects' }
   | { kind: 'project'; id: string }
   | { kind: 'code' }
-export type SettingsTab = 'general' | 'keys' | 'credits' | 'usage' | 'memory' | 'import' | 'about'
+export type SettingsTab = 'general' | 'keys' | 'credits' | 'usage' | 'memory' | 'import' | 'skill' | 'about'
 
 export interface Draft {
   projectId?: string
@@ -103,7 +104,9 @@ interface State {
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
   artifact: Artifact | null
-  modal: 'settings' | 'onboarding' | 'handoff' | 'subscription' | null
+  modal: 'settings' | 'onboarding' | 'handoff' | 'incoming' | 'subscription' | null
+  /** A handoff passed in from outside the app, waiting for the user to accept or discard it. */
+  incoming: IncomingHandoff | null
   /** The subscription panel was opened to finish setup straight away. */
   subscriptionAuto: boolean
   /** What to do once the subscription panel has finished setting up. */
@@ -123,8 +126,17 @@ interface State {
   setResearchNext(on: boolean): void
   /** Writes a handoff summary of the open chat and continues it with another provider. */
   handoffTo(to: Provider): Promise<void>
-  /** Starts a chat in the current mode from a handoff summary written in another app. */
-  startFromHandoff(text: string): Promise<boolean>
+  /**
+   * Starts a chat from a handoff summary written in another app: in the current mode,
+   * or in `provider`. `received` marks a handoff the skill passed in, not one pasted by hand.
+   */
+  startFromHandoff(text: string, options?: { provider?: Provider; received?: boolean }): Promise<boolean>
+  /**
+   * Shows a handoff that arrived from outside the app, if one is waiting. With `orPaste`,
+   * the paste dialog opens when nothing is.
+   */
+  checkIncoming(orPaste?: boolean): Promise<void>
+  discardIncoming(): void
   /** Keep the open chat (or the next new one) on its provider even when credit runs low. */
   setNoFallback(on: boolean): Promise<void>
   openHandoffModal(): void
@@ -202,6 +214,7 @@ export const useApp = create<State>((set, get) => ({
   models: { claude: [], chatgpt: [], gemini: [] },
   artifact: null,
   modal: null,
+  incoming: null,
   subscriptionAuto: false,
   subscriptionThen: null,
   settingsTab: 'general',
@@ -230,6 +243,8 @@ export const useApp = create<State>((set, get) => ({
       models: { claude, chatgpt, gemini },
       modal: settings.onboarded ? null : 'onboarding',
     })
+    // A handoff may be what opened the app.
+    await get().checkIncoming()
   },
 
   setMode(mode) {
@@ -373,15 +388,47 @@ export const useApp = create<State>((set, get) => ({
     if (!result.ok) get().notify(result.error ?? 'The chat could not be handed off.', 'error')
   },
 
-  async startFromHandoff(text) {
-    const conversation = await api.conversations.fromHandoff({ provider: get().mode, text })
+  async startFromHandoff(text, options) {
+    const provider = options?.provider ?? get().mode
+    const conversation = await api.conversations.fromHandoff({ provider, text, received: options?.received })
     if (!conversation) {
       get().notify('Paste a handoff summary first.', 'error')
       return false
     }
-    set({ conversation, view: { kind: 'chat' }, artifact: null, modal: null, composerSeed: null, draft: emptyDraft() })
+    if (provider !== get().mode) void api.settings.update({ lastProvider: provider })
+    set({
+      conversation,
+      mode: provider,
+      view: { kind: 'chat' },
+      artifact: null,
+      modal: null,
+      incoming: null,
+      composerSeed: null,
+      draft: emptyDraft(),
+      researchNext: false,
+    })
     await get().refreshMetas()
     return true
+  },
+
+  async checkIncoming(orPaste = false) {
+    // During the first-run wizard a handoff stays where it is until the wizard is done.
+    if (get().modal === 'onboarding') return
+    const fresh = await api.handoff.take()
+    if (fresh && fresh.source !== 'none') {
+      set({ incoming: fresh, modal: 'incoming' })
+    } else if (get().incoming) {
+      set({ modal: 'incoming' })
+    } else if (fresh) {
+      set({ modal: 'handoff' })
+      get().notify('Threefold was asked to pick up a handoff, but none was waiting. Copy it in the other app and paste it here.')
+    } else if (orPaste) {
+      set({ modal: 'handoff' })
+    }
+  },
+
+  discardIncoming() {
+    set({ incoming: null, modal: null })
   },
 
   async setNoFallback(on) {
@@ -395,7 +442,8 @@ export const useApp = create<State>((set, get) => ({
   },
 
   openHandoffModal() {
-    set({ modal: 'handoff' })
+    // A handoff that is already waiting is shown instead of an empty paste box.
+    void get().checkIncoming(true)
   },
 
   openSubscription(options) {

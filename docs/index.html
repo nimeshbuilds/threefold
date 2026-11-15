@@ -304,15 +304,15 @@
     <section id="start" aria-labelledby="start-title">
       <h2 id="start-title">Quick start</h2>
       <p class="section-lede">
-        Two ways to get Threefold onto your Mac: download the ready-made app, or build it yourself from the source.
-        Both take a few minutes.
+        Three ways to get Threefold onto your Mac: download the ready-made app, build it yourself from the source, or
+        let a coding assistant you already use install it. Each takes a few minutes.
       </p>
 
       <div class="paths">
         <article class="path">
           <p class="path-tag">Option A</p>
           <h3>Download the app</h3>
-          <p class="path-meta">Version 0.6.3 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+          <p class="path-meta">Version 0.7.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
 
           <div class="warn" role="note">
             <p><strong>Read this first: the app is not signed by Apple.</strong></p>
@@ -412,8 +412,102 @@
         </article>
       </div>
 
+      <div class="then" id="assistant-install">
+        <p class="path-tag">Option C</p>
+        <h3>Let your coding assistant install it</h3>
+        <p>
+          If you use Claude Code, Codex or Gemini CLI, add the <code>threefolds</code> skill (the next box) and ask
+          for it in a session:
+        </p>
+        <pre class="cmd"><code>/threefolds install Threefold</code></pre>
+        <p>
+          The assistant checks that your Mac can run the app, tells you that the app is not signed by Apple, and
+          waits for your yes. Then it downloads the app from this project's GitHub release, checks the download
+          against the published checksum, checks that the app is intact and is Threefold, puts it in Applications and
+          opens it. The same request later brings a newer version in.
+        </p>
+        <p>
+          The skill forbids the assistant to use <code>sudo</code>, to ask for your password, to change any macOS
+          security setting or to touch your API keys. <strong>What you should know:</strong> an app fetched this way
+          is not marked as downloaded from the internet, so macOS does not show the warning from Option A. You are
+          relying on this project instead of on Apple's check. Say yes only if you trust it; the
+          <a href="https://github.com/nimeshbuilds/threefold">source</a> and the
+          <a href="skills/threefolds/SKILL.md">skill's full text</a> are public. In a chat app that cannot run
+          commands on your Mac, the same request gets you the link to this page.
+        </p>
+      </div>
+
+      <div class="then" id="skill">
+        <h3>Install the <code>threefolds</code> skill</h3>
+        <p>
+          <code>threefolds</code> teaches Claude, ChatGPT and Gemini to write a handoff summary of any chat, to pass
+          it straight into Threefold on your Mac, and to install or update Threefold when you ask. It is one text file
+          of instructions with no code in it.
+        </p>
+        <p>
+          <strong>Already running Threefold?</strong> Open <strong>Settings → Handoff skill</strong> and click
+          <strong>Install</strong> next to Claude Code, Codex or Gemini CLI. That is all. The same tab saves the ZIP
+          for the Claude app, copies the message that creates the skill in ChatGPT and Gemini, and lists commands to
+          try.
+        </p>
+        <p><strong>Or install it straight from GitHub</strong>, with no file to download or unzip:</p>
+
+        <div class="import-grid">
+          <article class="import-card ember">
+            <h3>Claude</h3>
+            <p><strong>Claude Code.</strong> One command:</p>
+            <pre class="cmd"><code>mkdir -p ~/.claude/skills/threefolds &amp;&amp; curl -fsSL https://raw.githubusercontent.com/nimeshbuilds/threefold/main/skills/threefolds/SKILL.md -o ~/.claude/skills/threefolds/SKILL.md</code></pre>
+            <p>Then type <code>/threefolds</code> in any session.</p>
+            <p class="small">
+              <strong>The Claude app and claude.ai</strong> accept a skill only as an uploaded ZIP; there is no way to
+              add one from a link. The steps are under <a href="#handoff">Handoff</a>.
+            </p>
+          </article>
+
+          <article class="import-card ink">
+            <h3>ChatGPT</h3>
+            <p><strong>Codex.</strong> Ask Codex to fetch it:</p>
+            <pre class="cmd"><code>$skill-installer install the skill at https://github.com/nimeshbuilds/threefold/tree/main/skills/threefolds</code></pre>
+            <p>Or one command, then restart Codex:</p>
+            <pre class="cmd"><code>mkdir -p ~/.agents/skills/threefolds &amp;&amp; curl -fsSL https://raw.githubusercontent.com/nimeshbuilds/threefold/main/skills/threefolds/SKILL.md -o ~/.agents/skills/threefolds/SKILL.md</code></pre>
+            <p>Then type <code>$threefolds</code> in any session.</p>
+            <p class="small">
+              <strong>The ChatGPT app</strong> has Skills only in Business, Enterprise, Healthcare and Edu workspaces.
+              There, paste the install message below into a chat. On a personal plan, use the prompt under
+              <a href="#handoff">Handoff</a>.
+            </p>
+          </article>
+
+          <article class="import-card tide">
+            <h3>Gemini</h3>
+            <p><strong>Gemini CLI.</strong> One command:</p>
+            <pre class="cmd"><code>gemini skills install https://github.com/nimeshbuilds/threefold.git --path skills/threefolds</code></pre>
+            <p>Then ask it to "use the threefolds skill" in any session.</p>
+            <p class="small">
+              <strong>The Gemini app</strong> creates a skill from a message. Copy the install message below, paste
+              it into a new chat at <a href="https://gemini.google.com/">gemini.google.com</a>, review what Gemini
+              shows and click <strong>Create</strong>.
+            </p>
+          </article>
+        </div>
+
+        <div class="skill-message" data-skill-install hidden>
+          <button type="button" class="button">Copy the install message</button>
+          <span class="small">For the Gemini app and for ChatGPT workspaces with Skills: it asks the assistant to create the skill from its own text.</span>
+        </div>
+
+        <h4>Try it</h4>
+        <ul class="tryit">
+          <li><code>/threefolds</code> <span>Write a handoff summary of this chat.</span></li>
+          <li><code>/threefolds and open it in Threefold</code> <span>Write it and pass it straight in. You are asked before anything opens.</span></li>
+          <li><code>$threefolds then pass it to Threefold</code> <span>The same in Codex, where skills start with a dollar sign.</span></li>
+          <li><code>Use the threefolds skill. Keep the latest draft in full.</code> <span>Plain words work in every assistant, and you can say what must not be shortened.</span></li>
+          <li><code>/threefolds update Threefold</code> <span>Bring the app up to the newest version.</span></li>
+        </ul>
+      </div>
+
       <p class="fineprint center">
-        Either way, the first launch opens a short wizard that connects your API keys. That part is next.
+        Whichever way you install it, the first launch opens a short wizard that connects your API keys. That part is next.
       </p>
     </section>
 
@@ -500,23 +594,48 @@
       <h2 id="handoff-title">Or bring one chat over in a minute, with the threefolds skill</h2>
       <p class="section-lede">
         An export takes a while and brings everything. When you only want to carry on with one conversation, ask the
-        assistant you are leaving to write a handoff summary, and paste it into Threefold. No export, no import.
+        assistant you are leaving to write a handoff summary and pass it to Threefold. No export, no import.
       </p>
 
       <ol class="setup handoff-steps">
         <li>
           <h3>Add the skill once</h3>
-          <p><code>threefolds</code> is a small skill: one text file of instructions, with no code in it. Add it to the official Claude, ChatGPT or Gemini app. The steps for each are below.</p>
+          <p><code>threefolds</code> is a small skill: one text file of instructions, with no code in it. Threefold installs it for Claude Code, Codex and Gemini CLI with one click, or you can <a href="#skill">add it straight from GitHub</a>. The chat apps' steps are below.</p>
         </li>
         <li>
           <h3>Run it in any chat</h3>
           <p>Open the conversation you want to move and type <code>/threefolds</code>, or ask for a handoff summary. The assistant writes one: goal, background, what was done, where things stand, what is next.</p>
         </li>
         <li>
-          <h3>Paste it into Threefold</h3>
-          <p>Copy that message. In Threefold choose <strong>File → Continue from a Handoff…</strong>, paste, and carry on in whichever mode you like. The summary is sent as background with your next message.</p>
+          <h3>Say yes, and it arrives</h3>
+          <p>A coding tool on your Mac sees that Threefold is installed and asks whether to pass the handoff in. A chat app ends its reply with a link: copy the reply and click it. Either way Threefold opens, shows you what arrived, and asks where to continue.</p>
         </li>
       </ol>
+
+      <div class="split handoff-arrive">
+        <div>
+          <h3>Threefold asks before it does anything</h3>
+          <p>
+            A handoff that reaches the app from outside is shown to you in full first: its title, who it says it is
+            from, how it arrived. Threefold picks the mode that matches the sender, Claude mode for a chat from
+            Claude, and you can pick another, or discard it. No chat exists until you continue, and nothing goes to
+            a provider until you send a message.
+          </p>
+          <ul class="ticks">
+            <li><strong>The link carries nothing.</strong> <code>threefold://handoff</code> only tells the app to look for a handoff that is already on your Mac. Text put into the link is ignored, and no other link does anything.</li>
+            <li><strong>Two places are looked at, no others.</strong> Threefold's own inbox folder, where the skill saves the file, and your clipboard. Text that is not a Threefold handoff is left alone.</li>
+            <li><strong>Files are checked.</strong> A file is taken only if it is a plain file that you own, with the expected name, under 1 MB and less than a day old. Links to other files are never followed.</li>
+            <li><strong>The sender is a claim.</strong> macOS does not tell an app who opened a link, so Threefold shows what the handoff says about itself and points out when the link and the summary disagree.</li>
+          </ul>
+          <p class="small">You can always do it by hand instead: copy the summary, choose <strong>File → Continue from a Handoff…</strong> in Threefold, and paste.</p>
+        </div>
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/incoming.png" width="1280" height="840" loading="lazy" alt="Threefold showing a handoff that was passed in: its title, that it says it is from Gemini, that it arrived as a file in the inbox folder, the full summary, a choice of Claude, ChatGPT or Gemini with Gemini selected, and Discard and Continue buttons">
+        </figure>
+      </div>
+
+      <h3 class="sub">Adding the skill to the chat apps</h3>
 
       <div class="import-grid">
         <article class="import-card ember">
@@ -549,6 +668,7 @@
             <li>Click <strong>Create</strong>, then <strong>Upload</strong>, and select the file. Review it and click <strong>Create</strong>.</li>
             <li>In any chat, type <code>/</code> (or <code>@</code>, if you have the newer shortcut) and pick <strong>threefolds</strong>.</li>
           </ol>
+          <p class="small">Without a download: paste the <a href="#skill">install message</a> into a new chat and Gemini creates the skill from it.</p>
           <p class="small">Skills are for personal Google accounts, age 18 or over; work and school accounts come later. Uploading works on the web and on Mac. <a href="https://support.google.com/gemini/answer/17094296">Google's guide</a></p>
         </article>
       </div>
@@ -556,8 +676,9 @@
       <div class="then prompt-block">
         <h3>No Skills on your plan? Paste this prompt instead</h3>
         <p>
-          It is the skill's own text. Paste it as a message at the end of the conversation you want to move, in any
-          assistant, and you get the same handoff summary. Threefold also has a button that copies it.
+          It is the skill's own text, without the part about installing the app. Paste it as a message at the end of
+          the conversation you want to move, in any assistant, and you get the same handoff summary. Threefold also
+          has a button that copies it.
         </p>
         <div class="prompt-box" data-handoff-prompt hidden>
           <button type="button" class="button" hidden>Copy the prompt</button>
@@ -569,9 +690,10 @@
         </p>
       </div>
       <p class="note">
-        Read a handoff before you paste it anywhere: it is a summary of your conversation, so it can contain whatever
-        you discussed. The skill tells the assistant to leave out passwords, keys and card numbers. The steps above
-        follow each company's help pages; they have not been tested by us inside every plan.
+        Read a handoff before you continue with it: it is a summary of your conversation, so it can contain whatever
+        you discussed. The skill tells the assistant to leave out passwords, keys and card numbers, and never to put
+        any part of a conversation into a link. The steps above follow each company's help pages; they have not been
+        tested by us inside every plan.
       </p>
     </section>
 
@@ -597,7 +719,7 @@
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is an early preview, built in public. Version 0.6.3 is available as a download for Apple Silicon
+        Threefold is an early preview, built in public. Version 0.7.0 is available as a download for Apple Silicon
         Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
         testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>

@@ -73,8 +73,9 @@
       return response.text()
     })
     .then(function (text) {
-      // Drop the front matter between the two "---" lines; the rest is the prompt.
-      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').trim()
+      // Drop the front matter between the two "---" lines. The prompt is what follows,
+      // up to the section about installing the app, which a pasted prompt has no use for.
+      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').split('\n## Installing Threefold')[0].trim()
       var code = box.querySelector('code')
       code.textContent = intro + '\n\n' + body
       box.hidden = false
@@ -88,6 +89,36 @@
           button.textContent = 'Copied'
           setTimeout(function () {
             button.textContent = 'Copy the prompt'
+          }, 1600)
+        })
+      })
+    })
+    .catch(function () {})
+})()
+
+// The "install message" for assistants that create a skill from a chat message
+// (the Gemini app, ChatGPT workspaces with Skills): a request to create the
+// skill, followed by the skill's own text. Built from the published file, so it
+// cannot drift from it. The button stays hidden when that is not possible.
+;(function () {
+  var box = document.querySelector('[data-skill-install]')
+  if (!box || !window.fetch || !navigator.clipboard) return
+  var button = box.querySelector('button')
+  fetch('skills/threefolds/SKILL.md')
+    .then(function (response) {
+      if (!response.ok) throw new Error('not found')
+      return response.text()
+    })
+    .then(function (text) {
+      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').trim()
+      var message =
+        'Create a skill named "threefolds" based on these instructions. Keep the instructions exactly as they are written.\n\n' + body
+      box.hidden = false
+      button.addEventListener('click', function () {
+        navigator.clipboard.writeText(message).then(function () {
+          button.textContent = 'Copied'
+          setTimeout(function () {
+            button.textContent = 'Copy the install message'
           }, 1600)
         })
       })

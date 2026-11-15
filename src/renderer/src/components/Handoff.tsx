@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Handoff, HandoffProgress, Provider } from '@shared/types'
 import { FALLBACK_MIN_PROVIDERS, FALLBACK_THRESHOLDS, type FallbackPlan } from '@shared/fallback'
-import { HANDOFF_GUIDE_URL, HANDOFF_PROMPT, SKILL_NAME } from '@shared/handoff'
+import { HANDOFF_PROMPT, SKILL_NAME } from '@shared/handoff'
 import { DEFAULT_MODEL, formatUsd, modelLabel } from '@shared/pricing'
 import { API_NAME, MODE_NAME } from '../lib/format'
 import { connectedProviders, fallbackPlan, useApp } from '../state'
@@ -86,6 +86,8 @@ export function HandoffCard({ handoff }: { handoff: Handoff }) {
     detail = `${from} credit was ${Math.round(handoff.usedPct ?? 0)}% used, so this chat moved here. ${writer} wrote a summary of the earlier conversation${cost ? ` for ${cost}` : ''}, and new replies build on it.`
   } else if (handoff.source === 'manual') {
     detail = `${writer} wrote a summary of the earlier conversation${cost ? ` for ${cost}` : ''}, and new replies build on it.`
+  } else if (handoff.source === 'received') {
+    detail = 'This handoff summary was passed in from another app, and you accepted it. It is sent with your messages as background, so you do not have to repeat yourself.'
   } else {
     detail = 'You pasted this handoff summary. It is sent with your messages as background, so you do not have to repeat yourself.'
   }
@@ -175,7 +177,7 @@ export function HandoffMenu() {
   )
 }
 
-async function copyPrompt(notify: (text: string, tone?: 'info' | 'error') => void): Promise<void> {
+export async function copyPrompt(notify: (text: string, tone?: 'info' | 'error') => void): Promise<void> {
   try {
     await api.app.copyText(HANDOFF_PROMPT)
     notify('Prompt copied. Paste it into the chat you want to bring over.')
@@ -190,6 +192,7 @@ export function HandoffModal() {
   const close = useApp((s) => s.closeModal)
   const start = useApp((s) => s.startFromHandoff)
   const notify = useApp((s) => s.notify)
+  const openSettings = useApp((s) => s.openSettings)
   const [text, setText] = useState('')
 
   useEffect(() => {
@@ -223,8 +226,8 @@ export function HandoffModal() {
           <button className="btn ghost" onClick={() => void copyPrompt(notify)}>
             <Icon name="copy" size={15} /> Copy the prompt
           </button>
-          <button className="btn ghost" onClick={() => void api.app.openExternal(HANDOFF_GUIDE_URL)}>
-            <Icon name="external" size={15} /> Get the skill
+          <button className="btn ghost" onClick={() => openSettings('skill')}>
+            <Icon name="download" size={15} /> Install the skill
           </button>
           <span className="handoff-spacer" />
           <button className="btn primary" disabled={!text.trim()} onClick={() => void start(text)}>
@@ -234,6 +237,129 @@ export function HandoffModal() {
         <p className="muted small">
           Nothing is sent until you write a message. The summary then goes to {API_NAME[mode]} with it as background and
           is billed as input tokens, like any other text.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const ARRIVED: Record<'inbox' | 'clipboard', string> = {
+  inbox: 'As a file in Threefold’s inbox folder on this Mac',
+  clipboard: 'From your clipboard',
+}
+
+/**
+ * A handoff arrived from outside the app. It is shown in full, with what is known
+ * about where it came from, and nothing happens until the user picks a mode and
+ * continues. Closing the dialog keeps the handoff; "Discard" drops it.
+ */
+export function IncomingHandoffModal() {
+  const incoming = useApp((s) => s.incoming)
+  const keys = useApp((s) => s.keys)
+  const mode = useApp((s) => s.mode)
+  const close = useApp((s) => s.closeModal)
+  const discard = useApp((s) => s.discardIncoming)
+  const start = useApp((s) => s.startFromHandoff)
+  const openSettings = useApp((s) => s.openSettings)
+  const connected = connectedProviders(keys)
+  // The mode of the assistant the chat comes from, when that provider is connected.
+  const origin = incoming?.sender ?? incoming?.fromProvider
+  const [chosen, setChosen] = useState<Provider | null>(null)
+  const provider = chosen ?? (origin && connected.includes(origin) ? origin : connected.includes(mode) ? mode : connected[0])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [close])
+
+  if (!incoming || incoming.source === 'none') return null
+  const disagree = Boolean(incoming.sender && incoming.fromProvider && incoming.sender !== incoming.fromProvider)
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <div className="modal handoff-modal incoming-modal" role="dialog" aria-label="A handoff is waiting">
+        <button className="icon-btn modal-close" onClick={close} aria-label="Decide later">
+          <Icon name="close" size={18} />
+        </button>
+        <h2>A handoff is waiting</h2>
+        <p className="lead">
+          {incoming.source === 'inbox'
+            ? 'A chat was passed to Threefold from another app.'
+            : 'Threefold was asked to pick up a handoff and found this one on your clipboard.'}{' '}
+          Nothing has been started or sent. Read it, then choose where to continue.
+        </p>
+        <dl className="incoming-facts">
+          <div>
+            <dt>Chat</dt>
+            <dd>{incoming.title ?? 'No title given'}</dd>
+          </div>
+          <div>
+            <dt>Says it is from</dt>
+            <dd>
+              {incoming.sender ? MODE_NAME[incoming.sender] : 'Not stated by the sender'}
+              {incoming.from ? ` · summary written by ${incoming.from}` : ''}
+            </dd>
+          </div>
+          <div>
+            <dt>Arrived</dt>
+            <dd>{ARRIVED[incoming.source]}</dd>
+          </div>
+        </dl>
+        {disagree && (
+          <p className="incoming-warn" role="note">
+            The sender says {MODE_NAME[incoming.sender!]}, but the summary says it was written by {incoming.from}. Read it
+            with care before you continue.
+          </p>
+        )}
+        <pre className="incoming-text" tabIndex={0} aria-label="The handoff summary">
+          {incoming.summary}
+        </pre>
+        {connected.length === 0 ? (
+          <div className="handoff-modal-actions">
+            <span className="muted small">Connect a provider to continue this chat. The handoff is kept meanwhile.</span>
+            <span className="handoff-spacer" />
+            <button className="btn ghost" onClick={discard}>
+              Discard
+            </button>
+            <button className="btn primary" onClick={() => openSettings('keys')}>
+              Add an API key
+            </button>
+          </div>
+        ) : (
+          <>
+            <label className="field incoming-pick">
+              <span>Continue in</span>
+              <div className="seg wide">
+                {connected.map((option) => (
+                  <button key={option} className={provider === option ? 'active' : ''} onClick={() => setChosen(option)}>
+                    {MODE_NAME[option]}
+                  </button>
+                ))}
+              </div>
+            </label>
+            <div className="handoff-modal-actions">
+              <button className="btn ghost" onClick={discard}>
+                Discard
+              </button>
+              <span className="handoff-spacer" />
+              <button
+                className="btn primary"
+                disabled={!provider}
+                onClick={() => provider && void start(incoming.summary, { provider, received: true })}
+              >
+                Continue in {provider ? MODE_NAME[provider] : '…'}
+              </button>
+            </div>
+          </>
+        )}
+        <p className="muted small">
+          macOS does not tell Threefold which app sent a handoff, so the sender above is what the handoff itself claims.
+          Nothing is sent until you write a message
+          {provider ? `; the summary then goes to ${API_NAME[provider]} with it as background and is billed as input tokens` : ''}.
+          Close this to decide later: File → Continue from a Handoff brings it back.
         </p>
       </div>
     </div>
@@ -314,6 +440,7 @@ export function FallbackSettings() {
 /** Settings, Import tab: bring one chat over with a summary instead of a full export. */
 export function HandoffImportBlock() {
   const openHandoffModal = useApp((s) => s.openHandoffModal)
+  const openSettings = useApp((s) => s.openSettings)
   const notify = useApp((s) => s.notify)
   return (
     <div className="key-setup">
@@ -323,23 +450,20 @@ export function HandoffImportBlock() {
       </div>
       <ol className="steps">
         <li>
-          Add the <strong>{SKILL_NAME}</strong> skill to the official Claude, ChatGPT or Gemini app (
-          <a
-            href={HANDOFF_GUIDE_URL}
-            onClick={(event) => {
-              event.preventDefault()
-              void api.app.openExternal(HANDOFF_GUIDE_URL)
-            }}
-          >
-            how to install it
-          </a>
-          ). Or skip that and copy the prompt with the button below.
+          Add the <strong>{SKILL_NAME}</strong> skill to Claude, ChatGPT or Gemini:{' '}
+          <button className="inline-link" onClick={() => openSettings('skill')}>
+            install it from here
+          </button>
+          . Or skip that and copy the prompt with the button below.
         </li>
         <li>
           Open the chat you want to bring over and type <code>/{SKILL_NAME}</code>, or paste the prompt. The assistant
           writes a handoff summary of the whole chat.
         </li>
-        <li>Copy that summary, click the button below and paste it.</li>
+        <li>
+          In a coding tool on this Mac, say yes when it offers to open Threefold: the handoff arrives by itself.
+          Anywhere else, copy the summary, click the button below and paste it.
+        </li>
       </ol>
       <div className="key-row">
         <button className="btn primary" onClick={openHandoffModal}>

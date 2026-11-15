@@ -5,6 +5,7 @@ import nimeshbuildsLogo from '../assets/nimeshbuilds.png'
 import { API_NAME, MODE_NAME, ORG_URL, daysUntil, shortDate } from '../lib/format'
 import { useApp, type SettingsTab } from '../state'
 import { FallbackSettings, HandoffImportBlock } from './Handoff'
+import { SkillTab } from './Skill'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 
@@ -445,6 +446,7 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'usage', label: 'Spend', icon: 'chart' },
   { id: 'memory', label: 'Memory', icon: 'memory' },
   { id: 'import', label: 'Import history', icon: 'upload' },
+  { id: 'skill', label: 'Handoff skill', icon: 'handoff' },
   { id: 'about', label: 'About', icon: 'info' },
 ]
 
@@ -568,6 +570,8 @@ export function SettingsModal() {
               <ImportBlock provider="gemini" />
             </>
           )}
+
+          {tab === 'skill' && <SkillTab />}
 
           {tab === 'about' && (
             <>

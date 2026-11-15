@@ -3,12 +3,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { BrowserWindow, Menu, app, nativeTheme, net, protocol, session, shell } from 'electron'
+import { BrowserWindow, Menu, app, clipboard, nativeTheme, net, protocol, session, shell } from 'electron'
 import type { ChatEvent, CliEvent, CodeEvent, Provider, SpendSummary } from '@shared/types'
 import { ChatService, DEMO } from './chat'
 import { CliManager } from './code/cli'
 import { PermissionBridge } from './code/permissionBridge'
 import { CodeService } from './code/service'
+import { IncomingHandoffs, inboxDir } from './incoming'
 import { registerIpc } from './ipc'
 import { Secrets } from './secrets'
 import { Store } from './store'
@@ -38,7 +39,23 @@ function migrateFromPreviousName(): void {
   }
 }
 
-// threefold://file/<name> serves attachments; threefold://artifact/<id> serves previews.
+/**
+ * Links opened from outside the app (macOS sends them here). The only one that
+ * means anything is threefold://handoff, which the threefolds skill opens after
+ * it has saved a handoff for Threefold. A link never moves the window anywhere
+ * and never carries content: see incoming.ts. Links that arrive before the app
+ * has started are kept until it has.
+ */
+const earlyLinks: string[] = []
+let onLink = (url: string): void => {
+  if (earlyLinks.length < 5) earlyLinks.push(url)
+}
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  onLink(String(url))
+})
+
+// Inside the window, threefold://file/<name> serves attachments and threefold://artifact/<id> serves previews.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'threefold', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ])
@@ -171,6 +188,30 @@ void app.whenReady().then(() => {
   const bridge = new PermissionBridge(app.getPath('userData'))
   const code = new CodeService(store, secrets, (event: CodeEvent) => sendToWindow('code:event', event), sendSpend, { cli, bridge })
 
+  // Handoffs passed in by the threefolds skill. The window asks for what is waiting
+  // when it opens, so a handoff that started the app is not missed.
+  let started = false
+  const incoming = new IncomingHandoffs(
+    inboxDir(app.getPath('userData')),
+    () => clipboard.readText(),
+    () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        // Before start-up has finished, the window is about to be made anyway.
+        if (started) createWindow()
+        return
+      }
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+      sendToWindow('handoff:incoming', null)
+    },
+  )
+  onLink = (url) => void incoming.open(url)
+  for (const url of earlyLinks.splice(0)) onLink(url)
+  // Makes this copy of the app the one that threefold:// links open. Left alone in
+  // development and in tests, where it would point links at a throwaway build.
+  if (app.isPackaged && !process.env.THREEFOLD_DATA_DIR) app.setAsDefaultProtocolClient('threefold')
+
   protocol.handle('threefold', (request) => {
     const url = new URL(request.url)
     const name = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
@@ -201,9 +242,10 @@ void app.whenReady().then(() => {
   // The app never needs camera, microphone, location or notifications.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
 
-  registerIpc({ store, secrets, chat, code, cli, artifacts, window: () => mainWindow })
+  registerIpc({ store, secrets, chat, code, cli, incoming, artifacts, window: () => mainWindow })
   buildMenu()
   createWindow()
+  started = true
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

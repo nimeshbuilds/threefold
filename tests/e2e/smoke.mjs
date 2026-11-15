@@ -32,6 +32,10 @@ for (const kind of ['claude', 'codex']) {
   fs.writeFileSync(path.join(fakeDir, kind), script, { mode: 0o755 })
 }
 const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-project-'))
+// A stand-in home folder, so installing the threefolds skill never touches the real one.
+// Claude Code "has been used" here; Codex and Gemini CLI have not.
+const skillHome = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-skill-home-'))
+fs.mkdirSync(path.join(skillHome, '.claude'))
 
 const packaged = process.env.THREEFOLD_APP
 const app = await electron.launch({
@@ -45,6 +49,7 @@ const app = await electron.launch({
     THREEFOLD_CODEX_CLI: path.join(fakeDir, 'codex'),
     THREEFOLD_CLI_LATEST: JSON.stringify({ claude: '2.1.325', chatgpt: '0.169.0' }),
     FAKE_CLI_STATE: fakeState,
+    THREEFOLD_SKILL_HOME: skillHome,
   },
 })
 const page = await app.firstWindow()
@@ -640,6 +645,162 @@ try {
   await shot('22-import-handoff')
   await page.click('.modal-close')
 
+  // ---- a handoff passed in from outside: the skill saves a file, then opens a link ----
+  const inbox = path.join(dataDir, 'inbox')
+  check('the app keeps a private inbox folder for handoffs', fs.existsSync(inbox) && (fs.statSync(inbox).mode & 0o777) === 0o700)
+  // macOS delivers a link opened from outside as this event.
+  const openLink = (url) =>
+    app.evaluate(({ app: electronApp }, link) => {
+      electronApp.emit('open-url', { preventDefault() {} }, link)
+    }, url)
+  const chooseFromMenu = (label) =>
+    app.evaluate(({ Menu }, text) => {
+      const file = Menu.getApplicationMenu().items.find((item) => item.label === 'File')
+      file.submenu.items.find((item) => item.label.startsWith(text)).click()
+    }, label)
+  const savedChats = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8')).length
+  const chatsBefore = savedChats()
+  const waiting = path.join(inbox, 'handoff-20261115-101500.md')
+  fs.writeFileSync(
+    waiting,
+    '# Threefold handoff\n\n- **Title:** Billing migration\n- **From:** Gemini 3.5 Pro\n\n## Goal\nMove billing to the new schema.\n\n--- end of handoff ---\n',
+  )
+  // Start somewhere else, so that landing in the sender's mode means something.
+  await page.click('.mode-switch button:has-text("Claude")')
+  await page.click('.side-btn:has-text("New chat")')
+  const addressBefore = page.url()
+  await openLink('threefold://artifact/anything')
+  await openLink('threefold://file/keys.json')
+  await openLink('threefold://settings?from=gemini')
+  await openLink('https://example.com/')
+  await page.waitForTimeout(500)
+  check(
+    'links other than the handoff link are ignored, even with a handoff waiting',
+    (await page.locator('.modal').count()) === 0 && fs.existsSync(waiting) && page.url() === addressBefore,
+  )
+
+  await openLink('threefold://handoff?from=gemini&text=this+part+of+a+link+is+ignored')
+  await page.waitForSelector('.incoming-modal')
+  const incomingText = (await page.textContent('.incoming-modal')) ?? ''
+  check(
+    'an incoming handoff is shown first, not acted on',
+    /A handoff is waiting/.test(incomingText) && /Billing migration/.test(incomingText) && /Nothing has been started or sent/.test(incomingText),
+  )
+  check(
+    'it says who it claims to be from, who wrote it and how it arrived',
+    /Says it is fromGemini · summary written by Gemini 3\.5 Pro/.test(incomingText) && /inbox folder/.test(incomingText) && /macOS does not tell Threefold which app sent/.test(incomingText),
+    incomingText.slice(0, 260),
+  )
+  const shown = (await page.textContent('.incoming-text')) ?? ''
+  check('the whole handoff can be read before deciding, and nothing from the link is in it', /Move billing to the new schema/.test(shown) && !/ignored/.test(shown))
+  check(
+    'the mode that matches the sender is preselected',
+    (await page.textContent('.incoming-pick .seg button.active')) === 'Gemini' && /Continue in Gemini/.test((await page.textContent('.incoming-modal .btn.primary')) ?? ''),
+  )
+  check('the file leaves the inbox once it has been read', fs.readdirSync(inbox).length === 0)
+  check('no chat exists until the user continues', savedChats() === chatsBefore && (await page.getAttribute('html', 'data-mode')) === 'claude')
+  await page.waitForSelector('.toast', { state: 'detached', timeout: 9000 })
+  await shot('23-incoming-handoff')
+
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.incoming-modal', { state: 'detached' })
+  await chooseFromMenu('Continue from a Handoff')
+  await page.waitForSelector('.incoming-modal')
+  check('closing the dialog keeps the handoff, and the File menu brings it back', /Billing migration/.test((await page.textContent('.incoming-modal')) ?? ''))
+  await page.click('.incoming-modal .btn.primary')
+  await page.waitForSelector('.handoff-card')
+  const receivedCard = (await page.textContent('.handoff-card')) ?? ''
+  check(
+    'continuing opens a chat in the chosen mode, marked as passed in',
+    (await page.getAttribute('html', 'data-mode')) === 'gemini' &&
+      /Billing migration/.test((await page.textContent('.topbar-title')) ?? '') &&
+      /Continued from Gemini 3\.5 Pro/.test(receivedCard) &&
+      /passed in from another app, and you accepted it/.test(receivedCard) &&
+      savedChats() === chatsBefore + 1,
+    receivedCard,
+  )
+  await page.fill('.composer textarea', 'continue')
+  await page.keyboard.press('Enter')
+  await answered()
+  check('the reply builds on the handoff that was passed in', /Picking up from the handoff summary/.test((await page.textContent('.msg.assistant .markdown')) ?? ''))
+
+  // ---- the same link from a chat app in the browser: the handoff is on the clipboard ----
+  await app.evaluate(
+    ({ clipboard }, text) => clipboard.writeText(text),
+    'Here it is:\n\n# Threefold handoff\n\n- **Title:** Trip plan\n- **From:** ChatGPT\n\n## Goal\nFour days in Lisbon.\n\n--- end of handoff ---\nCopy this message, then open the link.',
+  )
+  await openLink('threefold://handoff?from=claude')
+  await page.waitForSelector('.incoming-modal')
+  const clipText = (await page.textContent('.incoming-modal')) ?? ''
+  check('a copied handoff is picked up from the clipboard', /From your clipboard/.test(clipText) && /Trip plan/.test(clipText) && !/Copy this message/.test((await page.textContent('.incoming-text')) ?? ''))
+  check(
+    'a sender that does not match the summary is pointed out',
+    /The sender says Claude, but the summary says it was written by ChatGPT/.test((await page.textContent('.incoming-warn')) ?? ''),
+  )
+  await page.click('.incoming-pick .seg button:has-text("ChatGPT")')
+  check('the user can pick a different mode', /Continue in ChatGPT/.test((await page.textContent('.incoming-modal .btn.primary')) ?? ''))
+  await shot('24-incoming-clipboard')
+  await page.click('.incoming-modal .btn:has-text("Discard")')
+  await page.waitForSelector('.incoming-modal', { state: 'detached' })
+  check('discarding starts nothing', savedChats() === chatsBefore + 1)
+
+  await app.evaluate(({ clipboard }) => clipboard.writeText('just some notes, not a handoff'))
+  await openLink('threefold://handoff')
+  await page.waitForSelector('.handoff-input')
+  check(
+    'a link with nothing waiting opens the empty paste box and says so, and the discarded handoff is gone',
+    /none was waiting/.test((await page.textContent('.toast')) ?? '') && (await page.inputValue('.handoff-input')) === '' && (await page.locator('.incoming-modal').count()) === 0,
+  )
+  await page.click('.modal-close')
+
+  // ---- settings: installing the threefolds skill ----
+  await page.click('.user-row')
+  await page.click('.modal-nav .side-btn:has-text("Handoff skill")')
+  const claudeRow = page.locator('.skill-row[data-target="claude-code"]')
+  await claudeRow.waitFor()
+  const claudeRowText = (await claudeRow.textContent()) ?? ''
+  check(
+    'the skill tab shows where each coding tool stands',
+    /Not installed/.test(claudeRowText) &&
+      /~\/\.claude\/skills\/threefolds\/SKILL\.md/.test(claudeRowText) &&
+      /Codex was not found on this Mac/.test((await page.textContent('.skill-row[data-target="codex"]')) ?? '') &&
+      /Gemini CLI was not found on this Mac/.test((await page.textContent('.skill-row[data-target="gemini-cli"]')) ?? ''),
+    claudeRowText,
+  )
+  await claudeRow.locator('.btn:has-text("Install")').click()
+  await page.waitForFunction(() => document.querySelector('.skill-row[data-target="claude-code"] .status')?.textContent === 'Installed')
+  const skillFile = path.join(skillHome, '.claude/skills/threefolds/SKILL.md')
+  check(
+    'one click installs the published skill file for Claude Code',
+    fs.readFileSync(skillFile, 'utf8') === fs.readFileSync(path.resolve('skills/threefolds/SKILL.md'), 'utf8'),
+  )
+  check('only the chosen tool is touched', !fs.existsSync(path.join(skillHome, '.agents')) && !fs.existsSync(path.join(skillHome, '.gemini')))
+  check('the app says how to run it', /Type \/threefolds in any Claude Code session/.test((await page.textContent('.toast')) ?? ''))
+  const examples = await page.locator('.skill-example code').allTextContents()
+  check(
+    'each provider has commands to try',
+    examples.length === 9 && examples.includes('/threefolds') && examples.includes('$threefolds') && examples.some((text) => /pass this chat to Threefold/.test(text)),
+    examples.join(' | '),
+  )
+  await page.locator('.skill-example', { hasText: '$threefolds then pass it to Threefold' }).click()
+  check('a command can be copied with a click', (await app.evaluate(({ clipboard }) => clipboard.readText())) === '$threefolds then pass it to Threefold')
+  await page.click('.skill-group[data-provider="gemini"] .btn:has-text("Copy the install message")')
+  const installMessage = await app.evaluate(({ clipboard }) => clipboard.readText())
+  check(
+    'chat apps get a message that creates the skill',
+    /^Create a skill named "threefolds"/.test(installMessage) && /# Threefold handoff/.test(installMessage) && /Passing it on/.test(installMessage),
+    installMessage.slice(0, 60),
+  )
+  await page.click('.skill-group[data-provider="claude"] .btn:has-text("Save the ZIP")')
+  await page.waitForFunction(() => /Saved threefolds\.zip/.test(document.querySelector('.toast')?.textContent ?? ''))
+  check('the ZIP for the Claude app is saved without a download', fs.statSync(path.join(skillHome, 'threefolds.zip')).size > 1000)
+  await page.locator('.modal-body').evaluate((element) => element.scrollTo(0, 0))
+  await shot('25-skill-tab')
+  await claudeRow.locator('.btn:has-text("Remove")').click()
+  await page.waitForFunction(() => document.querySelector('.skill-row[data-target="claude-code"] .status')?.textContent === 'Not installed')
+  check('the skill can be taken out again', !fs.existsSync(skillFile) && !fs.existsSync(path.dirname(skillFile)))
+  await page.click('.modal-close')
+
   // ---- dark theme ----
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.click('.side-btn:has-text("New chat")')
@@ -651,9 +812,9 @@ try {
 
   // ---- persistence ----
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
-  check('conversations are saved to disk', saved.length === 11, `${saved.length} saved`)
+  check('conversations are saved to disk', saved.length === 12, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
-  check('every request is written to the spend ledger', ledger.length === 21, `${ledger.length} entries`)
+  check('every request is written to the spend ledger', ledger.length === 22, `${ledger.length} entries`)
   const coding = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'code')
   check(
     'only the part of a coding session that ran on the API key is on the ledger',
@@ -679,6 +840,7 @@ try {
   fs.rmSync(dataDir, { recursive: true, force: true })
   fs.rmSync(fakeDir, { recursive: true, force: true })
   fs.rmSync(projectDir, { recursive: true, force: true })
+  fs.rmSync(skillHome, { recursive: true, force: true })
 }
 
 console.log(failures.length === 0 ? '\nAll checks passed.' : `\n${failures.length} check(s) failed.`)

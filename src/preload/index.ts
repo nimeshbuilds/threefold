@@ -36,6 +36,16 @@ const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => v
     stop: call('chat:stop'),
     onEvent: (listener) => subscribe<ChatEvent>('chat:event', listener),
   },
+  handoff: {
+    take: call('handoff:take'),
+    onIncoming: (listener) => subscribe<null>('handoff:incoming', () => listener()),
+  },
+  skill: {
+    status: call('skill:status'),
+    install: call('skill:install'),
+    remove: call('skill:remove'),
+    saveZip: call('skill:saveZip'),
+  },
   attachments: {
     pick: call('attachments:pick'),
     fromPaths: call('attachments:fromPaths'),

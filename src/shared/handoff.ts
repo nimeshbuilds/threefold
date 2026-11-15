@@ -4,22 +4,80 @@
 // official apps and the copy-and-paste prompt all say exactly the same thing.
 
 import skillFile from '../../skills/threefolds/SKILL.md?raw'
-import type { ChatMessage, Handoff } from './types'
+import { isProvider, type ChatMessage, type Handoff, type Provider } from './types'
 
 export const SKILL_NAME = 'threefolds'
+/** The skill file exactly as it is published and installed. */
+export const SKILL_FILE: string = skillFile
 /** First line of every handoff. */
 export const HANDOFF_HEADING = '# Threefold handoff'
 /** Last line of every handoff. */
 export const HANDOFF_END = '--- end of handoff ---'
 /** Where the skill and its install steps are published. */
 export const HANDOFF_GUIDE_URL = 'https://nimeshbuilds.github.io/threefold/#handoff'
+/** The page a chat app's reply links to: it asks Threefold to open, and carries no part of the handoff. */
+export const HANDOFF_OPEN_URL = 'https://nimeshbuilds.github.io/threefold/open/'
+/** Heading of the skill's section on what to do with a handoff once it is written. */
+export const HANDOFF_DELIVERY_HEADING = '## Passing it on'
+/** Heading of the skill's last section: installing the Threefold app when the user asks for that. */
+export const SKILL_INSTALL_HEADING = '## Installing Threefold'
 
 /** The skill's instructions without its front matter. */
 export const HANDOFF_INSTRUCTIONS = skillFile.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').trim()
 
-/** First line of the prompt that does the skill's job in an app without Skills. */
+/**
+ * Only the part about writing a handoff. Threefold's own summary writer gets
+ * this: it has nowhere to pass the handoff on to, so it must stop at the end line.
+ */
+export const HANDOFF_WRITING = HANDOFF_INSTRUCTIONS.split(`\n${HANDOFF_DELIVERY_HEADING}`)[0]!.trim()
+
+/** Writing a handoff and passing it on: everything except installing the app. */
+export const HANDOFF_HOWTO = HANDOFF_INSTRUCTIONS.split(`\n${SKILL_INSTALL_HEADING}`)[0]!.trim()
+
+/**
+ * The prompt that does the skill's job in an app without Skills. It is pasted
+ * into a chat to get a handoff of it, so the part about installing is left out.
+ */
 export const HANDOFF_PROMPT_INTRO = 'Follow the instructions below for this conversation, right now.'
-export const HANDOFF_PROMPT = `${HANDOFF_PROMPT_INTRO}\n\n${HANDOFF_INSTRUCTIONS}`
+export const HANDOFF_PROMPT = `${HANDOFF_PROMPT_INTRO}\n\n${HANDOFF_HOWTO}`
+
+/** A message that creates the skill in an app that builds skills from chat (Gemini, ChatGPT). */
+export const SKILL_INSTALL_PROMPT =
+  `Create a skill named "${SKILL_NAME}" based on these instructions. Keep the instructions exactly as they are written.\n\n${HANDOFF_INSTRUCTIONS}`
+
+// ---------- a handoff arriving from outside the app ----------
+
+/**
+ * Reads a `threefold://handoff` link, the one the skill opens after it has saved
+ * a handoff for Threefold. The link is only a knock on the door: the one thing
+ * taken from it is who it says it is from, and only when that is one of the
+ * three known names. A link never carries the handoff itself, so everything
+ * else in it is ignored.
+ */
+export function parseHandoffLink(input: unknown): { sender?: Provider } | null {
+  if (typeof input !== 'string' || input.length > 300) return null
+  let url: URL
+  try {
+    url = new URL(input)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'threefold:' || url.hostname !== 'handoff') return null
+  if (url.username || url.password || url.port || (url.pathname !== '' && url.pathname !== '/')) return null
+  const from = url.searchParams.get('from')?.toLowerCase()
+  return isProvider(from) ? { sender: from } : {}
+}
+
+/** The mode whose assistant a name belongs to: "Claude Opus" is Claude mode, "Codex" is ChatGPT mode. */
+export function providerFromName(name: string | undefined): Provider | undefined {
+  if (!name) return undefined
+  const found: Provider[] = []
+  if (/\bclaude\b|\banthropic\b/i.test(name)) found.push('claude')
+  if (/\bchat\s?gpt|\bgpt|\bcodex\b|\bopenai\b/i.test(name)) found.push('chatgpt')
+  if (/\bgemini\b|\bgoogle\b/i.test(name)) found.push('gemini')
+  // A name that points two ways points nowhere.
+  return found.length === 1 ? found[0] : undefined
+}
 
 // ---------- reading a handoff ----------
 
@@ -74,7 +132,7 @@ export function parseHandoff(input: string): ParsedHandoff | null {
 export const HANDOFF_WRITER_OPENING = 'You write handoff summaries.'
 export const HANDOFF_WRITER_SYSTEM =
   `${HANDOFF_WRITER_OPENING} A user is moving a conversation from one AI assistant to another, ` +
-  `and the new assistant will see only what you write.\n\n${HANDOFF_INSTRUCTIONS}`
+  `and the new assistant will see only what you write.\n\n${HANDOFF_WRITING}`
 
 /** About 100,000 tokens: room for a long chat, inside every default model's context window. */
 export const MAX_TRANSCRIPT_CHARS = 400_000
@@ -110,7 +168,7 @@ export function handoffWriterPrompt(input: { transcript: string; from: string; t
       ? `The conversation itself began from an earlier handoff, shown first. Carry over everything from it that still matters.\n\n<earlier_handoff>\n${input.earlier}\n</earlier_handoff>`
       : '',
     `<conversation>\n${input.transcript}\n</conversation>`,
-    `Write the handoff summary now. Stop at the "${HANDOFF_END}" line: the rule about adding a sentence after it does not apply here.`,
+    `Write the handoff summary now. Stop at the "${HANDOFF_END}" line and write nothing after it.`,
   ]
     .filter(Boolean)
     .join('\n\n')

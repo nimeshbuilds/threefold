@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a handoff to Threefold</title>
+  <meta name="description" content="Opens the Threefold app on your Mac so it can pick up a handoff summary you have copied. Nothing from your conversation passes through this page.">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14171f" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="../" aria-label="Threefold home">
+      <picture>
+        <source srcset="../assets/mark-on-dark.svg" media="(prefers-color-scheme: dark)">
+        <img src="../assets/mark.svg" width="30" height="30" alt="">
+      </picture>
+      <span>Threefold</span>
+    </a>
+  </header>
+
+  <main id="main">
+    <section class="open-page" aria-labelledby="open-title">
+      <p class="eyebrow">Handoff</p>
+      <h1 id="open-title">Send this chat to Threefold</h1>
+      <p class="lede">Two steps. Nothing from your conversation passes through this page.</p>
+
+      <ol class="numbered">
+        <li>
+          <p><strong>Copy the handoff.</strong> In your chat, use the copy button under the assistant's handoff message.</p>
+        </li>
+        <li>
+          <p>
+            <strong>Open Threefold.</strong> Your browser asks whether to allow it. Threefold then picks the handoff up
+            from your clipboard, shows it to you, and asks where you want to continue.
+          </p>
+          <p><a class="button primary" id="open" href="threefold://handoff">Open Threefold</a></p>
+          <p class="small" id="sender" hidden>
+            The link you followed says the handoff comes from <strong></strong>, so Threefold will suggest that mode.
+            You can pick another.
+          </p>
+        </li>
+      </ol>
+
+      <div class="then">
+        <h2>Nothing happened?</h2>
+        <p>
+          Threefold may not be on this Mac yet, or it may be older than version 0.7. The
+          <a href="../#start">quick start</a> has the download. You can also bring a handoff in by hand: in Threefold
+          choose <strong>File → Continue from a Handoff…</strong> and paste it.
+        </p>
+      </div>
+
+      <p class="note">
+        This page only asks your Mac to open Threefold. The link behind the button is always the same and never holds
+        any part of a conversation: the handoff goes from your clipboard straight into the app on your own computer.
+        Threefold shows what it found and waits for you before a chat is started or anything is sent to a provider.
+      </p>
+    </section>
+  </main>
+
+  <script src="open.js" defer></script>
+</body>
+</html>

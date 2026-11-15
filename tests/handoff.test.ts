@@ -10,19 +10,28 @@ import type { ChatEvent, ChatMessage, Conversation, HandoffProgress, LedgerEntry
 import { addRequest, emptyUsage } from '@shared/pricing'
 import { DEFAULT_FALLBACK, cleanFallback, creditUsedPct, planFallback, type CreditState } from '@shared/fallback'
 import {
+  HANDOFF_DELIVERY_HEADING,
   HANDOFF_END,
   HANDOFF_HEADING,
+  HANDOFF_HOWTO,
   HANDOFF_INSTRUCTIONS,
+  HANDOFF_OPEN_URL,
   HANDOFF_PROMPT,
   HANDOFF_PROMPT_INTRO,
   HANDOFF_WRITER_OPENING,
   HANDOFF_WRITER_SYSTEM,
+  HANDOFF_WRITING,
+  SKILL_FILE,
+  SKILL_INSTALL_HEADING,
+  SKILL_INSTALL_PROMPT,
   SKILL_NAME,
   handoffSystemNote,
   handoffTranscript,
   handoffWriterPrompt,
   parseHandoff,
+  parseHandoffLink,
 } from '@shared/handoff'
+import { INBOX_FILE } from '../src/main/incoming'
 import { assistantLabel, hasHistory, writeHandoff } from '../src/main/handoff'
 import { buildSystemPrompt, type TurnContext, type TurnResult } from '../src/main/providers/common'
 import { Store } from '../src/main/store'
@@ -144,8 +153,85 @@ describe('the threefolds skill', () => {
 
   it('is what the app itself uses to write a summary, and what the copyable prompt contains', () => {
     expect(HANDOFF_WRITER_SYSTEM.startsWith(HANDOFF_WRITER_OPENING)).toBe(true)
-    expect(HANDOFF_WRITER_SYSTEM).toContain(HANDOFF_INSTRUCTIONS)
-    expect(HANDOFF_PROMPT).toBe(`${HANDOFF_PROMPT_INTRO}\n\n${HANDOFF_INSTRUCTIONS}`)
+    expect(HANDOFF_WRITER_SYSTEM).toContain(HANDOFF_WRITING)
+    expect(HANDOFF_PROMPT).toBe(`${HANDOFF_PROMPT_INTRO}\n\n${HANDOFF_HOWTO}`)
+    // A prompt pasted into a chat is for getting a handoff: it says nothing about installing.
+    expect(HANDOFF_HOWTO).toContain(HANDOFF_DELIVERY_HEADING)
+    expect(HANDOFF_PROMPT).not.toContain(SKILL_INSTALL_HEADING)
+    expect(HANDOFF_PROMPT).not.toMatch(/curl|releases\/latest/)
+  })
+
+  it('gives the app only the part about writing: its own writer has nowhere to pass a handoff on to', () => {
+    expect(HANDOFF_INSTRUCTIONS).toContain(HANDOFF_DELIVERY_HEADING)
+    expect(HANDOFF_INSTRUCTIONS.startsWith(HANDOFF_WRITING)).toBe(true)
+    expect(HANDOFF_WRITING).toContain(HANDOFF_END)
+    expect(HANDOFF_WRITING).toMatch(/Leave out secrets/)
+    for (const text of [HANDOFF_WRITING, HANDOFF_WRITER_SYSTEM]) {
+      expect(text).not.toContain(HANDOFF_DELIVERY_HEADING)
+      expect(text).not.toMatch(/threefold:\/\/|Application Support|open "/)
+    }
+    const prompt = handoffWriterPrompt({ transcript: 'USER:\nhi', from: 'Claude', today: 'today' })
+    expect(prompt).toMatch(/write nothing after it/)
+  })
+
+  it('passes a handoff on only after asking, and never inside a link', () => {
+    const delivery = HANDOFF_HOWTO.slice(HANDOFF_HOWTO.indexOf(HANDOFF_DELIVERY_HEADING))
+    // It looks for the app, asks, and waits for a yes.
+    expect(delivery).toContain('ls -d /Applications/Threefold.app ~/Applications/Threefold.app')
+    expect(delivery).toMatch(/Shall I open it and pass this handoff in\?/)
+    expect(delivery).toMatch(/Then stop and wait\. Only if the user says yes/)
+    // The file goes where the app looks, under a name the app accepts.
+    expect(delivery).toContain('~/Library/Application Support/Threefold/inbox/')
+    const example = delivery.match(/handoff-[0-9-]+\.md/)?.[0] ?? ''
+    expect(example).toMatch(INBOX_FILE)
+    // The link the skill opens is one the app understands, for each of the three names.
+    expect(delivery).toContain('open "threefold://handoff?from=NAME"')
+    for (const sender of ['claude', 'chatgpt', 'gemini'] as const) {
+      expect(delivery).toContain(`\`${sender}\``)
+      expect(parseHandoffLink(`threefold://handoff?from=${sender}`)).toEqual({ sender })
+    }
+    // Chat apps get the web page, which is the one the app publishes.
+    expect(delivery).toContain(`${HANDOFF_OPEN_URL}?from=NAME`)
+    // And the rule that keeps conversations out of links.
+    expect(delivery).toMatch(/never put any part of the handoff or of the conversation into a link, a web address or a command/)
+  })
+
+  it('installs the app only when asked, from the release, after saying what that means', () => {
+    const install = HANDOFF_INSTRUCTIONS.slice(HANDOFF_INSTRUCTIONS.indexOf(SKILL_INSTALL_HEADING))
+    expect(install.startsWith(SKILL_INSTALL_HEADING)).toBe(true)
+    expect(install).toMatch(/only when the user asks you to install, download, set up or update the Threefold app/)
+    expect(description).toMatch(/asks to install, download, set up or update the Threefold app/)
+    // It says the app is unsigned and what installing this way skips, then waits for a yes.
+    expect(install).toMatch(/not signed with an Apple Developer ID and it is not notarized/)
+    expect(install).toMatch(/macOS does not show its usual warning/)
+    expect(install).toMatch(/ask whether to go ahead, and wait for a yes/)
+    // The download is the release asset the build script makes, with its checksum beside it, and nothing else.
+    const release = fs.readFileSync(path.join(root, 'scripts/release.mjs'), 'utf8')
+    const links = install.match(/https?:\/\/[^\s)`]+/g) ?? []
+    const base = 'https://github.com/nimeshbuilds/threefold/releases/latest/download/'
+    expect(links.filter((link) => link.includes('/releases/'))).toEqual([`${base}Threefold-mac-arm64.zip`, `${base}Threefold-mac-arm64.zip.sha256`])
+    expect(new Set(links.map((link) => new URL(link.replace(/[.,]$/, '')).hostname))).toEqual(new Set(['github.com', 'nimeshbuilds.github.io']))
+    expect(release).toContain("'dist/Threefold-mac-arm64.zip'")
+    expect(release).toContain('`${zip}.sha256`')
+    // It is checked before it is used, and it is the right app.
+    expect(install).toContain('shasum -a 256 -c Threefold-mac-arm64.zip.sha256')
+    expect(install).toContain('codesign --verify --deep --strict Threefold.app')
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as { build: { appId: string } }
+    expect(install).toContain(`must print \`${pkg.build.appId}\``)
+    // What it must never do.
+    expect(install).toMatch(/Never use `sudo`/)
+    expect(install).toMatch(/Never change a system or security setting/)
+    expect(install).toMatch(/do not remove quarantine or any other attribute/)
+    expect(install).toMatch(/Never ask for, read or handle the user's API keys/)
+    expect(install).not.toMatch(/xattr|spctl|master-disable/)
+    // An assistant that cannot run commands sends the user to the quick start instead.
+    expect(install).toContain('https://nimeshbuilds.github.io/threefold/#start')
+  })
+
+  it('can be turned into a message that creates the skill in a chat', () => {
+    expect(SKILL_INSTALL_PROMPT.startsWith('Create a skill named "threefolds"')).toBe(true)
+    expect(SKILL_INSTALL_PROMPT).toContain(HANDOFF_INSTRUCTIONS)
+    expect(SKILL_FILE).toBe(skill)
   })
 
   it('is published on the website unchanged, as a file and inside the ZIP', async () => {

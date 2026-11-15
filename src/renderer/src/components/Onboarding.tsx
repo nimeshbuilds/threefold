@@ -25,6 +25,8 @@ export function Onboarding() {
     const connected = PROVIDERS.find((provider) => keys[provider])
     if (connected && !keys.claude) setMode(connected)
     close()
+    // A handoff that arrived during the wizard has been waiting for it to end.
+    void useApp.getState().checkIncoming()
   }
   const next = (): void => {
     if (step === 0) void update({ displayName: name.trim() })
