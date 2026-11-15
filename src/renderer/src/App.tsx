@@ -8,7 +8,7 @@ import { ProjectView, ProjectsList } from './components/Projects'
 import { SettingsModal } from './components/Settings'
 import { Sidebar } from './components/Sidebar'
 
-const api = window.twofold
+const api = window.threefold
 
 function useTheme(): void {
   const mode = useApp((s) => s.mode)
@@ -45,6 +45,8 @@ export function App() {
       else if (command === 'settings') state.openSettings()
       else if (command === 'mode-claude') state.setMode('claude')
       else if (command === 'mode-chatgpt') state.setMode('chatgpt')
+      else if (command === 'mode-gemini') state.setMode('gemini')
+      else if (command === 'threefold') state.openThreefold()
     })
     return () => {
       offChat()
@@ -59,7 +61,7 @@ export function App() {
     <div className={`app ${hasArtifact ? 'with-artifact' : ''}`}>
       <Sidebar />
       <main className="main">
-        {view.kind === 'chat' && <ChatView />}
+        {(view.kind === 'chat' || view.kind === 'threefold') && <ChatView />}
         {view.kind === 'projects' && <ProjectsList />}
         {view.kind === 'project' && <ProjectView id={view.id} />}
         {view.kind === 'code' && <CodeView />}

@@ -4,7 +4,7 @@ import { MODE_NAME, fileSize, shortDate } from '../lib/format'
 import { useApp } from '../state'
 import { Icon } from './Icon'
 
-const api = window.twofold
+const api = window.threefold
 
 export function ProjectsList() {
   const mode = useApp((s) => s.mode)

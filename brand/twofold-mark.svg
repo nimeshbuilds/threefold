@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Twofold">
-  <defs>
-    <clipPath id="left-sheet"><rect x="8" y="18" width="32" height="32" rx="9"/></clipPath>
-  </defs>
-  <rect x="8" y="18" width="32" height="32" rx="9" fill="#C2571A"/>
-  <rect x="24" y="14" width="32" height="32" rx="9" fill="#1F2430"/>
-  <rect x="24" y="14" width="32" height="32" rx="9" fill="#F2C9A8" clip-path="url(#left-sheet)"/>
-</svg>

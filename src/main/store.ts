@@ -18,6 +18,7 @@ import type {
   Settings,
   SpendSummary,
 } from '@shared/types'
+import { isProvider } from '@shared/types'
 import { DEFAULT_MODEL, billingCycle } from '@shared/pricing'
 
 const DEFAULT_SETTINGS: Settings = {
@@ -27,10 +28,12 @@ const DEFAULT_SETTINGS: Settings = {
   credits: {
     claude: { monthlyUsd: 100, renewalDay: 1 },
     chatgpt: { monthlyUsd: 100, renewalDay: 1 },
+    gemini: { monthlyUsd: 10, renewalDay: 1 },
   },
   memoryEnabled: true,
   onboarded: false,
   displayName: '',
+  reviewers: [],
 }
 
 const IMAGE_EXT: Record<string, string> = {
@@ -104,6 +107,7 @@ export function metaOf(conversation: Conversation): ConversationMeta {
     projectId: conversation.projectId,
     origin: conversation.origin,
     pinned: conversation.pinned,
+    panel: conversation.panel,
     costUsd: conversation.costUsd,
     messageCount: conversation.messages.length,
   }
@@ -146,8 +150,11 @@ export class Store {
       credits: {
         claude: { ...DEFAULT_SETTINGS.credits.claude, ...saved.credits?.claude },
         chatgpt: { ...DEFAULT_SETTINGS.credits.chatgpt, ...saved.credits?.chatgpt },
+        gemini: { ...DEFAULT_SETTINGS.credits.gemini, ...saved.credits?.gemini },
       },
     }
+    if (!isProvider(this.settings.lastProvider)) this.settings.lastProvider = 'claude'
+    if (!Array.isArray(this.settings.reviewers)) this.settings.reviewers = []
     this.loadIndex()
   }
 
@@ -169,6 +176,7 @@ export class Store {
       credits: {
         claude: { ...this.settings.credits.claude, ...patch.credits?.claude },
         chatgpt: { ...this.settings.credits.chatgpt, ...patch.credits?.chatgpt },
+        gemini: { ...this.settings.credits.gemini, ...patch.credits?.gemini },
       },
     }
     writeJson(this.file('settings.json'), this.settings)
@@ -380,7 +388,7 @@ export class Store {
   // ---------- spend ledger ----------
 
   recordSpend(entry: LedgerEntry): void {
-    if (!(entry.costUsd > 0) && entry.inputTokens === 0 && entry.outputTokens === 0) return
+    if (!(entry.costUsd > 0) && entry.inputTokens === 0 && entry.outputTokens === 0 && !entry.webSearches) return
     fs.appendFileSync(this.file('ledger.jsonl'), JSON.stringify(entry) + '\n')
   }
 
@@ -449,6 +457,17 @@ export class Store {
         byDay: [...byDay.entries()].map(([day, costUsd]) => ({ day, costUsd })).sort((a, b) => a.day.localeCompare(b.day)),
       }
     }
-    return { claude: build('claude'), chatgpt: build('chatgpt') }
+    return { claude: build('claude'), chatgpt: build('chatgpt'), gemini: build('gemini') }
+  }
+
+  /** Web searches recorded for a provider since the start of the calendar month. */
+  webSearchesThisMonth(provider: Provider, now = Date.now()): number {
+    const d = new Date(now)
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
+    let count = 0
+    for (const entry of this.readLedger()) {
+      if (entry.provider === provider && entry.ts >= monthStart) count += entry.webSearches ?? 0
+    }
+    return count
   }
 }

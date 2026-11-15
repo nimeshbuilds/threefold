@@ -1,5 +1,6 @@
-// Twofold main process: one window, local storage, and the bridge to the two APIs.
+// Threefold main process: one window, local storage, and the bridge to the three APIs.
 
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BrowserWindow, Menu, app, nativeTheme, net, protocol, session, shell } from 'electron'
@@ -14,13 +15,30 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
 
 // A separate data folder keeps tests and demos away from real conversations.
-if (process.env.TWOFOLD_DATA_DIR) app.setPath('userData', path.resolve(process.env.TWOFOLD_DATA_DIR))
+if (process.env.THREEFOLD_DATA_DIR) app.setPath('userData', path.resolve(process.env.THREEFOLD_DATA_DIR))
 
-app.setName('Twofold')
+app.setName('Threefold')
 
-// twofold://file/<name> serves attachments; twofold://artifact/<id> serves previews.
+/**
+ * The app was first called "Twofold". Chats, projects, memory and the spend
+ * ledger made under that name are copied over once. Saved API keys cannot be:
+ * macOS ties their encryption to the old app, so they have to be entered again.
+ */
+function migrateFromPreviousName(): void {
+  if (process.env.THREEFOLD_DATA_DIR) return
+  try {
+    const current = path.join(app.getPath('userData'), 'data')
+    const previous = path.join(app.getPath('appData'), 'Twofold', 'data')
+    if (fs.existsSync(current) || !fs.existsSync(previous)) return
+    fs.cpSync(previous, current, { recursive: true })
+  } catch {
+    // Start fresh if the old data cannot be read.
+  }
+}
+
+// threefold://file/<name> serves attachments; threefold://artifact/<id> serves previews.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'twofold', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'threefold', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ])
 
 /** What a previewed artifact may load. It runs in a sandboxed frame with no access to the app. */
@@ -39,9 +57,9 @@ const APP_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: twofold:",
+  "img-src 'self' data: blob: threefold:",
   "font-src 'self' data:",
-  'frame-src twofold:',
+  'frame-src threefold:',
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
@@ -61,7 +79,7 @@ function createWindow(): void {
     minWidth: 880,
     minHeight: 600,
     show: false,
-    title: 'Twofold',
+    title: 'Threefold',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1e1c' : '#f7f4ec',
@@ -117,6 +135,8 @@ function buildMenu(): void {
       submenu: [
         { label: 'Claude Mode', accelerator: 'CmdOrCtrl+1', click: () => sendToWindow('menu', 'mode-claude') },
         { label: 'ChatGPT Mode', accelerator: 'CmdOrCtrl+2', click: () => sendToWindow('menu', 'mode-chatgpt') },
+        { label: 'Gemini Mode', accelerator: 'CmdOrCtrl+3', click: () => sendToWindow('menu', 'mode-gemini') },
+        { label: 'Threefold Review', accelerator: 'CmdOrCtrl+4', click: () => sendToWindow('menu', 'threefold') },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -132,6 +152,7 @@ function buildMenu(): void {
 }
 
 void app.whenReady().then(() => {
+  migrateFromPreviousName()
   const store = new Store(path.join(app.getPath('userData'), 'data'))
   const secrets = new Secrets(path.join(app.getPath('userData'), 'keys.json'))
 
@@ -139,7 +160,7 @@ void app.whenReady().then(() => {
   const chat = new ChatService(store, secrets, (event: ChatEvent) => sendToWindow('chat:event', event), sendSpend)
   const code = new CodeService(store, secrets, (event: CodeEvent) => sendToWindow('code:event', event), sendSpend)
 
-  protocol.handle('twofold', (request) => {
+  protocol.handle('threefold', (request) => {
     const url = new URL(request.url)
     const name = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
     if (url.hostname === 'file') {

@@ -1,14 +1,16 @@
 /*
- * Twofold design tokens.
+ * Threefold design tokens.
  *
- * Two modes, each with a light and a dark theme. Claude mode is warm paper and
- * a serif reading face; ChatGPT mode is neutral and all sans. Brand colours
- * (Ember, Ink, Paper) are Twofold's own.
+ * Three modes, each with a light and a dark theme. Claude mode is warm paper
+ * and a serif reading face; ChatGPT mode is neutral and all sans; Gemini mode
+ * is cool, with a blue accent. Brand colours (Ember, Ink, Tide, Paper) are
+ * Threefold's own.
  */
 
 :root {
   --ember: #c2571a;
   --ink: #1f2430;
+  --tide: #3b63d9;
   --paper: #f7f4ec;
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
@@ -128,6 +130,59 @@
   --hover: rgba(255, 255, 255, 0.06);
   --active: rgba(255, 255, 255, 0.11);
   --code-bg: #151618;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+/* ---------- Gemini mode ---------- */
+
+[data-mode='gemini'] {
+  --font-reading: var(--font-ui);
+  --font-heading: var(--font-ui);
+  --reading-size: 15.5px;
+  --composer-radius: 30px;
+  --bubble-radius: 22px;
+  --button-radius: 999px;
+}
+
+[data-mode='gemini'][data-theme='light'] {
+  --bg: #f8fafd;
+  --surface: #ffffff;
+  --surface-2: #eef2f9;
+  --sidebar: #eef2f9;
+  --text: #171a21;
+  --text-2: #565d6b;
+  --text-3: #8790a0;
+  --border: #dde3ee;
+  --border-strong: #c7cfdd;
+  --accent: #3b63d9;
+  --accent-soft: rgba(59, 99, 217, 0.1);
+  --accent-contrast: #ffffff;
+  --bubble: #e6ecf8;
+  --hover: rgba(30, 50, 100, 0.06);
+  --active: rgba(30, 50, 100, 0.11);
+  --code-bg: #eef2f9;
+  --shadow: 0 1px 2px rgba(20, 35, 80, 0.06), 0 8px 24px rgba(20, 35, 80, 0.09);
+  color-scheme: light;
+}
+
+[data-mode='gemini'][data-theme='dark'] {
+  --bg: #16181d;
+  --surface: #20242c;
+  --surface-2: #1b1e25;
+  --sidebar: #111318;
+  --text: #e6e9f0;
+  --text-2: #a0a8b8;
+  --text-3: #6f7889;
+  --border: #2d323d;
+  --border-strong: #3c4352;
+  --accent: #8fabf5;
+  --accent-soft: rgba(143, 171, 245, 0.14);
+  --accent-contrast: #101421;
+  --bubble: #283044;
+  --hover: rgba(200, 215, 255, 0.07);
+  --active: rgba(200, 215, 255, 0.12);
+  --code-bg: #0f1115;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }

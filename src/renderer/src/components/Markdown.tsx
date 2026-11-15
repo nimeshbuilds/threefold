@@ -83,7 +83,7 @@ function buildComponents(streaming: boolean): Components {
           href={href}
           onClick={(event) => {
             event.preventDefault()
-            if (href) void window.twofold.app.openExternal(href)
+            if (href) void window.threefold.app.openExternal(href)
           }}
         >
           {children}
@@ -93,13 +93,13 @@ function buildComponents(streaming: boolean): Components {
     // Remote images are not loaded by the app; show them as a link instead.
     img({ src, alt }) {
       const url = typeof src === 'string' ? src : ''
-      if (url.startsWith('twofold://')) return <img src={url} alt={alt ?? ''} />
+      if (url.startsWith('threefold://')) return <img src={url} alt={alt ?? ''} />
       return (
         <a
           href={url}
           onClick={(event) => {
             event.preventDefault()
-            if (url) void window.twofold.app.openExternal(url)
+            if (url) void window.threefold.app.openExternal(url)
           }}
         >
           {alt || 'Image'} ↗

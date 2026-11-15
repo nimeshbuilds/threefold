@@ -4,10 +4,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
+import { isProvider } from '@shared/types'
 import type {
   Attachment,
   Conversation,
   ModelOption,
+  ModelRef,
   PermissionDecision,
   Project,
   Provider,
@@ -19,6 +21,7 @@ import { ChatService, DEMO } from './chat'
 import { CodeService } from './code/service'
 import { importExport } from './importService'
 import { claudeErrorMessage, verifyClaudeKey } from './providers/anthropic'
+import { geminiErrorMessage, verifyGeminiKey } from './providers/gemini'
 import { openaiErrorMessage, verifyOpenAIKey } from './providers/openai'
 import type { Secrets } from './secrets'
 import type { Store } from './store'
@@ -32,8 +35,34 @@ export interface IpcDeps {
   window: () => BrowserWindow | null
 }
 
-function isProvider(value: unknown): value is Provider {
-  return value === 'claude' || value === 'chatgpt'
+const VERIFY: Record<Provider, (key: string) => Promise<string[]>> = {
+  claude: verifyClaudeKey,
+  chatgpt: verifyOpenAIKey,
+  gemini: verifyGeminiKey,
+}
+const EXPLAIN: Record<Provider, (error: unknown) => string> = {
+  claude: claudeErrorMessage,
+  chatgpt: openaiErrorMessage,
+  gemini: geminiErrorMessage,
+}
+const MODE_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }
+
+/** Keeps only well-formed reviewer entries, without duplicates, capped at a sensible number. */
+function cleanReviewers(value: unknown): ModelRef[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const reviewers: ModelRef[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const { provider, model } = item as Record<string, unknown>
+    if (!isProvider(provider) || typeof model !== 'string' || !model) continue
+    const key = `${provider}:${model}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    reviewers.push({ provider, model })
+    if (reviewers.length >= 6) break
+  }
+  return reviewers
 }
 
 export function registerIpc(deps: IpcDeps): void {
@@ -66,18 +95,18 @@ export function registerIpc(deps: IpcDeps): void {
   handle('settings:get', () => store.getSettings())
   handle('settings:update', (patch: Partial<Settings>) => store.updateSettings(patch))
 
-  handle('keys:status', () => (DEMO ? { claude: true, chatgpt: true } : secrets.status()))
+  handle('keys:status', () => (DEMO ? { claude: true, chatgpt: true, gemini: true } : secrets.status()))
   handle('keys:save', async (provider: Provider, key: string) => {
     if (!isProvider(provider)) return { ok: false, error: 'Unknown provider.' }
     const trimmed = String(key ?? '').trim()
     if (!trimmed) return { ok: false, error: 'Paste your API key first.' }
     try {
-      const ids = provider === 'claude' ? await verifyClaudeKey(trimmed) : await verifyOpenAIKey(trimmed)
+      const ids = await VERIFY[provider](trimmed)
       secrets.set(provider, trimmed)
       fs.writeFileSync(modelsCache, JSON.stringify({ ...readAvailable(), [provider]: ids }))
       return { ok: true }
     } catch (error) {
-      return { ok: false, error: provider === 'claude' ? claudeErrorMessage(error) : openaiErrorMessage(error) }
+      return { ok: false, error: EXPLAIN[provider](error) }
     }
   })
   handle('keys:remove', (provider: Provider) => {
@@ -103,19 +132,24 @@ export function registerIpc(deps: IpcDeps): void {
 
   handle('conversations:list', () => store.listConversations())
   handle('conversations:get', (id: string) => store.getConversation(id))
-  handle('conversations:create', (input: { provider: Provider; projectId?: string; model?: string }) => {
+  handle('conversations:create', (input: { provider: Provider; projectId?: string; model?: string; reviewers?: ModelRef[] }) => {
     const provider: Provider = isProvider(input?.provider) ? input.provider : 'claude'
     const conversation = store.createConversation(
       provider,
       input.model ?? store.getSettings().defaultModel[provider],
       input.projectId,
     )
+    if (input.reviewers !== undefined) {
+      conversation.panel = true
+      conversation.reviewers = cleanReviewers(input.reviewers)
+      conversation.title = 'New Threefold chat'
+    }
     store.saveConversation(conversation)
     return conversation
   })
   handle(
     'conversations:update',
-    (id: string, patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId'>>) => {
+    (id: string, patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers'>>) => {
       const conversation = store.getConversation(id)
       if (!conversation) return null
       if (typeof patch.title === 'string' && patch.title.trim()) conversation.title = patch.title.trim().slice(0, 120)
@@ -130,6 +164,10 @@ export function registerIpc(deps: IpcDeps): void {
       if (patch.effort) conversation.effort = patch.effort
       if (typeof patch.pinned === 'boolean') conversation.pinned = patch.pinned
       if ('projectId' in patch) conversation.projectId = patch.projectId
+      if (patch.reviewers !== undefined && conversation.panel) {
+        conversation.reviewers = cleanReviewers(patch.reviewers)
+        store.updateSettings({ reviewers: conversation.reviewers })
+      }
       return store.saveConversation(conversation)
     },
   )
@@ -259,7 +297,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle('import:run', async (provider: Provider) => {
     if (!isProvider(provider)) return null
     const result = await openDialog({
-      title: `Import your ${provider === 'claude' ? 'Claude' : 'ChatGPT'} export`,
+      title: `Import your ${MODE_NAME[provider]} export`,
       properties: ['openFile'],
       filters: [{ name: 'Data export', extensions: ['zip', 'json'] }],
     })

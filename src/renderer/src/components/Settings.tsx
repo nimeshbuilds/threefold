@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import type { ImportResult, Memory, Provider, SpendSummary } from '@shared/types'
-import { MODELS, PRICING_AS_OF, formatTokens, formatUsd, modelLabel } from '@shared/pricing'
+import { MODELS, PRICING_AS_OF, currentRates, formatTokens, formatUsd, modelLabel } from '@shared/pricing'
 import { API_NAME, MODE_NAME, daysUntil, shortDate } from '../lib/format'
 import { useApp, type SettingsTab } from '../state'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 
-const api = window.twofold
+const api = window.threefold
 
 const LINKS: Record<Provider, { billing: string; keys: string; credits: string; export: string }> = {
+  gemini: {
+    billing: 'https://aistudio.google.com/',
+    keys: 'https://aistudio.google.com/apikey',
+    credits: 'https://aistudio.google.com/learn/claim-google-ai-plan-credits-in-ai-studio',
+    export: 'https://takeout.google.com/',
+  },
   claude: {
     billing: 'https://claude.ai/settings/billing',
     keys: 'https://platform.claude.com/settings/keys',
@@ -47,8 +53,8 @@ export function KeySetup({ provider }: { provider: Provider }) {
   const [state, setState] = useState<'idle' | 'checking'>('idle')
   const [error, setError] = useState<string | null>(null)
   const links = LINKS[provider]
-  const plans = provider === 'claude' ? 'Max, Ultra or Team' : 'Pro or Business'
-  const consoleName = provider === 'claude' ? 'Claude Console' : 'OpenAI API Platform'
+  const plans = { claude: 'Max, Ultra or Team', chatgpt: 'Pro or Business', gemini: 'Google AI Pro or Ultra' }[provider]
+  const consoleName = { claude: 'Claude Console', chatgpt: 'OpenAI API Platform', gemini: 'Google AI Studio' }[provider]
 
   const save = async (): Promise<void> => {
     setState('checking')
@@ -71,16 +77,33 @@ export function KeySetup({ provider }: { provider: Provider }) {
         <span className={`status ${connected ? 'ok' : ''}`}>{connected ? 'Connected' : 'Not connected'}</span>
       </div>
       <ol className="steps">
-        <li>
-          <strong>Claim your monthly API credits</strong> (if your plan has them: {plans}). In{' '}
-          <Link href={links.billing}>{MODE_NAME[provider]} → Settings → Billing</Link>, find <em>API credits</em> and link
-          an API organization. Your plan must be at least 7 days old. <Link href={links.credits}>Official guide</Link>
-        </li>
-        <li>
-          <strong>Create an API key</strong> in that same organization on the{' '}
-          <Link href={links.keys}>{consoleName}</Link>. Without credits this still works; usage is then billed to the card on
-          your API account.
-        </li>
+        {provider === 'gemini' ? (
+          <>
+            <li>
+              <strong>Claim your monthly credits</strong> (if your plan has them: {plans}). Open{' '}
+              <Link href={links.billing}>Google AI Studio</Link> and follow the prompt to claim your plan's credits. Google
+              asks for a one-time $5 prepayment before the credits can be used. <Link href={links.credits}>Official guide</Link>
+            </li>
+            <li>
+              <strong>Create an API key</strong> in <Link href={links.keys}>{consoleName}</Link>, in the project that has
+              billing set up. A key on the free tier also works, with low daily limits and not for every model.
+            </li>
+          </>
+        ) : (
+          <>
+            <li>
+              <strong>Claim your monthly API credits</strong> (if your plan has them: {plans}). In{' '}
+              <Link href={links.billing}>{MODE_NAME[provider]} → Settings → Billing</Link>, find <em>API credits</em> and
+              link an API organization. Your plan must be at least 7 days old.{' '}
+              <Link href={links.credits}>Official guide</Link>
+            </li>
+            <li>
+              <strong>Create an API key</strong> in that same organization on the{' '}
+              <Link href={links.keys}>{consoleName}</Link>. Without credits this still works; usage is then billed to the
+              card on your API account.
+            </li>
+          </>
+        )}
         <li>
           <strong>Paste the key here.</strong> It is checked with a free request and stored encrypted on this computer.
         </li>
@@ -91,7 +114,11 @@ export function KeySetup({ provider }: { provider: Provider }) {
           type="password"
           autoComplete="off"
           spellCheck={false}
-          placeholder={connected ? 'Paste a new key to replace the saved one' : provider === 'claude' ? 'sk-ant-…' : 'sk-…'}
+          placeholder={
+            connected
+              ? 'Paste a new key to replace the saved one'
+              : { claude: 'sk-ant-…', chatgpt: 'sk-…', gemini: 'AIza…' }[provider]
+          }
           value={key}
           onChange={(event) => setKey(event.target.value)}
           onKeyDown={(event) => {
@@ -123,7 +150,7 @@ export function CreditFields({ provider }: { provider: Provider }) {
   const update = useApp((s) => s.updateSettings)
   const settings = useApp((s) => s.settings)
   if (!plan || !settings) return null
-  const options = [0, 100, 200, 500]
+  const options = provider === 'gemini' ? [0, 10, 40, 100] : [0, 100, 200, 500]
   const set = (patch: Partial<typeof plan>): void => {
     void update({ credits: { ...settings.credits, [provider]: { ...plan, ...patch } } })
   }
@@ -164,6 +191,12 @@ export function CreditFields({ provider }: { provider: Provider }) {
           />
         </label>
       </div>
+      {provider === 'gemini' && (
+        <p className="muted small">
+          Google's credits stay valid for 12 months and add up, so what you do not use is not lost at renewal. The meter
+          still counts one month at a time.
+        </p>
+      )}
     </div>
   )
 }
@@ -242,7 +275,7 @@ function MemoryTab() {
     <>
       <h2>Memory</h2>
       <p className="lead">
-        Short facts the models may save about you and reuse in new chats, in both modes. They are stored only on this
+        Short facts the models may save about you and reuse in new chats, in every mode. They are stored only on this
         computer and added to the start of each new conversation.
       </p>
       <label className="toggle-row">
@@ -311,10 +344,21 @@ export function ImportBlock({ provider }: { provider: Provider }) {
         <h3>{MODE_NAME[provider]} history</h3>
       </div>
       <ol className="steps">
-        <li>
-          In <Link href={links.export}>{MODE_NAME[provider]} → Settings → {provider === 'claude' ? 'Privacy' : 'Data controls'}</Link>,
-          choose <em>Export data</em>. {MODE_NAME[provider]} emails you a download link, usually within minutes.
-        </li>
+        {provider === 'gemini' ? (
+          <li>
+            Open <Link href={links.export}>Google Takeout</Link>, choose <em>Deselect all</em>, tick <em>My Activity</em>,
+            keep only <em>Gemini Apps</em> inside it, and set its format to <em>JSON</em>. Google emails you a download
+            link.
+          </li>
+        ) : (
+          <li>
+            In{' '}
+            <Link href={links.export}>
+              {MODE_NAME[provider]} → Settings → {provider === 'claude' ? 'Privacy' : 'Data controls'}
+            </Link>
+            , choose <em>Export data</em>. {MODE_NAME[provider]} emails you a download link, usually within minutes.
+          </li>
+        )}
         <li>Download the ZIP file. You do not need to unzip it.</li>
         <li>Choose the ZIP here. Imported chats appear in the sidebar and can be continued through the API.</li>
       </ol>
@@ -347,8 +391,10 @@ export function ImportBlock({ provider }: { provider: Provider }) {
         </p>
       )}
       <p className="muted small">
-        The export is a snapshot. Chats you continue in Twofold do not sync back to {MODE_NAME[provider]}, and pictures
+        The export is a snapshot. Chats you continue in Threefold do not sync back to {MODE_NAME[provider]}, and pictures
         and uploaded files are not part of the export.
+        {provider === 'gemini' &&
+          ' Google exports an activity log, not conversations, so prompts made within half an hour of each other are grouped into one chat. Only activity that was being saved is included.'}
       </p>
     </div>
   )
@@ -433,11 +479,12 @@ export function SettingsModal() {
             <>
               <h2>API keys</h2>
               <p className="lead">
-                Twofold talks to Anthropic and OpenAI directly from this computer with your own keys. There is no Twofold
+                Threefold talks to Anthropic and OpenAI directly from this computer with your own keys. There is no Threefold
                 server and no account.
               </p>
               <KeySetup provider="claude" />
               <KeySetup provider="chatgpt" />
+              <KeySetup provider="gemini" />
             </>
           )}
 
@@ -445,11 +492,12 @@ export function SettingsModal() {
             <>
               <h2>Credits</h2>
               <p className="lead">
-                Tell Twofold how much API credit your plan grants each month and when it renews, so the meter can show
-                what is left. Twofold cannot read your real balance; it counts what it spends itself.
+                Tell Threefold how much API credit your plan grants each month and when it renews, so the meter can show
+                what is left. Threefold cannot read your real balance; it counts what it spends itself.
               </p>
               <CreditFields provider="claude" />
               <CreditFields provider="chatgpt" />
+              <CreditFields provider="gemini" />
             </>
           )}
 
@@ -457,11 +505,12 @@ export function SettingsModal() {
             <>
               <h2>Spend</h2>
               <p className="lead">
-                Counted from the token usage each API response reports, at the prices below. Spend outside Twofold is not
+                Counted from the token usage each API response reports, at the prices below. Spend outside Threefold is not
                 included.
               </p>
               <UsageBlock summary={spend.claude} />
               <UsageBlock summary={spend.chatgpt} />
+              <UsageBlock summary={spend.gemini} />
             </>
           )}
 
@@ -473,6 +522,7 @@ export function SettingsModal() {
               <p className="lead">Bring your existing conversations in from the official apps' data exports.</p>
               <ImportBlock provider="claude" />
               <ImportBlock provider="chatgpt" />
+              <ImportBlock provider="gemini" />
             </>
           )}
 
@@ -482,17 +532,21 @@ export function SettingsModal() {
               <div className="about-brand">
                 <Logo size={48} />
                 <div>
-                  <strong>Twofold {version}</strong>
-                  <p className="muted">Two assistants, one local app, your own API credits.</p>
+                  <strong>Threefold {version}</strong>
+                  <p className="muted">Three assistants, one local app, your own API credits.</p>
                 </div>
               </div>
               <p className="muted small">
-                Twofold is an independent app. It is not made by, affiliated with or endorsed by Anthropic or OpenAI.
-                “Claude” and “ChatGPT” are trademarks of their owners and are used here only to say which API a mode
-                connects to.
+                Threefold is an independent app. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or
+                Google. “Claude”, “ChatGPT” and “Gemini” are trademarks of their owners and are used here only to say
+                which API a mode connects to.
               </p>
               <h3>Prices used for the meter</h3>
-              <p className="muted small">USD per 1M tokens, from the providers' pricing pages on {PRICING_AS_OF}. Web search adds $0.01 per search.</p>
+              <p className="muted small">
+                USD per 1M tokens, from the providers' pricing pages on {PRICING_AS_OF}. Web search adds $0.01 per search
+                (Gemini: 5,000 a month free, then $0.014). Price changes the providers have announced are applied on
+                their start date.
+              </p>
               <table className="plain-table">
                 <thead>
                   <tr>
@@ -506,14 +560,16 @@ export function SettingsModal() {
                   {MODELS.map((model) => (
                     <tr key={model.id}>
                       <td>{model.label}</td>
-                      <td>${model.rates.input}</td>
-                      <td>${model.rates.cacheRead}</td>
-                      <td>${model.rates.output}</td>
+                      <td>${currentRates(model).input}</td>
+                      <td>${currentRates(model).cacheRead}</td>
+                      <td>${currentRates(model).output}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <p className="muted small">{API_NAME.claude} and {API_NAME.chatgpt} set these prices and can change them.</p>
+              <p className="muted small">
+                {API_NAME.claude}, {API_NAME.chatgpt} and {API_NAME.gemini} set these prices and can change them.
+              </p>
             </>
           )}
         </div>

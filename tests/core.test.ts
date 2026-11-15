@@ -12,7 +12,7 @@ import { Store, classify } from '../src/main/store'
 let dir: string
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twofold-test-'))
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-test-'))
 })
 
 afterEach(() => {
@@ -60,7 +60,7 @@ describe('code tools: path confinement', () => {
   })
 
   it('rejects a symlink that points outside the project', () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'twofold-outside-'))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-outside-'))
     try {
       fs.symlinkSync(outside, path.join(dir, 'link'))
       expect(() => resolveInside(dir, 'link/secret.txt')).toThrow(ToolError)
@@ -173,7 +173,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt({ ...base, provider: 'chatgpt', project, memories: [], memoryEnabled: false })
     expect(prompt).toContain('Be terse.')
     expect(prompt).toContain('the OpenAI API')
-    expect(prompt).toContain('Twofold')
+    expect(prompt).toContain('Threefold')
     expect(prompt).toContain('Sam')
   })
 })
@@ -243,7 +243,13 @@ describe('Store', () => {
 
   it('sums spend for the current billing cycle only, per provider, and adds live turns', () => {
     const store = new Store(dir)
-    store.updateSettings({ credits: { claude: { monthlyUsd: 100, renewalDay: 1 }, chatgpt: { monthlyUsd: 200, renewalDay: 1 } } })
+    store.updateSettings({
+      credits: {
+        claude: { monthlyUsd: 100, renewalDay: 1 },
+        chatgpt: { monthlyUsd: 200, renewalDay: 1 },
+        gemini: { monthlyUsd: 10, renewalDay: 1 },
+      },
+    })
     const now = new Date(2026, 10, 14, 12).getTime()
     const entry = { model: 'claude-opus-5-5', kind: 'chat' as const, ref: 'c', inputTokens: 10, outputTokens: 5 }
     store.recordSpend({ ...entry, ts: now - 1000, provider: 'claude', costUsd: 1.5 })
@@ -257,6 +263,8 @@ describe('Store', () => {
     expect(summary.claude.todayUsd).toBeCloseTo(1.5, 9)
     expect(summary.claude.monthlyUsd).toBe(100)
     expect(summary.chatgpt.spentUsd).toBeCloseTo(0.25, 9)
+    expect(summary.gemini.spentUsd).toBe(0)
+    expect(summary.gemini.monthlyUsd).toBe(10)
     expect(summary.claude.byModel[0]).toMatchObject({ model: 'claude-opus-5-5', inputTokens: 10 })
 
     store.clearLive('turn')
@@ -269,6 +277,27 @@ describe('Store', () => {
     expect(attachment.name).toBe('evil.txt')
     expect(store.attachmentPath(attachment).startsWith(path.join(dir, 'attachments'))).toBe(true)
     expect(store.findAttachmentFile('../settings.json')).toBeNull()
+  })
+
+  it('counts web searches for the current calendar month only', () => {
+    const store = new Store(dir)
+    const now = new Date(2026, 10, 14, 12).getTime()
+    const base = { provider: 'gemini' as const, model: 'gemini-4-hydrogen', kind: 'chat' as const, ref: 'c', inputTokens: 1, outputTokens: 1, costUsd: 0 }
+    store.recordSpend({ ...base, ts: now - 1000, webSearches: 4 })
+    store.recordSpend({ ...base, ts: new Date(2026, 9, 30).getTime(), webSearches: 9 })
+    store.recordSpend({ ...base, ts: now - 500, provider: 'claude', webSearches: 2 })
+    expect(store.webSearchesThisMonth('gemini', now)).toBe(4)
+    expect(store.webSearchesThisMonth('claude', now)).toBe(2)
+  })
+
+  it('marks Threefold chats in the index', () => {
+    const store = new Store(dir)
+    const conversation = store.createConversation('claude', 'claude-opus-5-5')
+    conversation.panel = true
+    conversation.reviewers = [{ provider: 'gemini', model: 'gemini-4-hydrogen' }]
+    store.saveConversation(conversation)
+    expect(new Store(dir).listConversations()[0]!.panel).toBe(true)
+    expect(new Store(dir).getConversation(conversation.id)!.reviewers).toHaveLength(1)
   })
 
   it('does not save the same memory twice', () => {

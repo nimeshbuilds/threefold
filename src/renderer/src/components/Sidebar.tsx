@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ConversationMeta, Provider } from '@shared/types'
 import { formatUsd } from '@shared/pricing'
 import { MODE_NAME, daysUntil, groupByRecency } from '../lib/format'
-import { useApp } from '../state'
+import { connectedProviders, useApp } from '../state'
 import { Icon } from './Icon'
 import { Wordmark } from './Logo'
 import { Popover } from './Popover'
 
-const api = window.twofold
+const api = window.threefold
 const PAGE = 250
 
 /** How much of this month's API credit is used, counting replies still streaming. */
@@ -160,6 +160,7 @@ function ModeSwitch() {
     <div className="mode-switch" role="tablist" aria-label="Mode">
       {option('claude')}
       {option('chatgpt')}
+      {option('gemini')}
     </div>
   )
 }
@@ -170,6 +171,8 @@ export function Sidebar() {
   const activeId = useApp((s) => s.conversation?.id)
   const view = useApp((s) => s.view)
   const newChat = useApp((s) => s.newChat)
+  const openThreefold = useApp((s) => s.openThreefold)
+  const reviewReady = useApp((s) => connectedProviders(s.keys).length >= 2)
   const setView = useApp((s) => s.setView)
   const openSettings = useApp((s) => s.openSettings)
   const name = useApp((s) => s.settings?.displayName ?? '')
@@ -178,7 +181,12 @@ export function Sidebar() {
   const [results, setResults] = useState<ConversationMeta[] | null>(null)
   const [limit, setLimit] = useState(PAGE)
 
-  const mine = useMemo(() => metas.filter((m) => m.provider === mode), [metas, mode])
+  const inPanel = view.kind === 'threefold'
+  // The Threefold tab lists its own chats, from every provider; the modes list ordinary chats.
+  const mine = useMemo(
+    () => metas.filter((m) => (inPanel ? m.panel === true : !m.panel && m.provider === mode)),
+    [metas, mode, inPanel],
+  )
 
   // Titles filter instantly; message text is searched after a short pause.
   useEffect(() => {
@@ -188,10 +196,12 @@ export function Sidebar() {
       return
     }
     const timer = setTimeout(() => {
-      void api.conversations.search(needle, mode).then(setResults)
+      void api.conversations
+        .search(needle, mode)
+        .then((found) => setResults(found.filter((m) => (inPanel ? m.panel === true : !m.panel))))
     }, 220)
     return () => clearTimeout(timer)
-  }, [query, mode])
+  }, [query, mode, inPanel])
 
   useEffect(() => setLimit(PAGE), [mode, query])
 
@@ -209,6 +219,18 @@ export function Sidebar() {
       <nav className="side-nav">
         <button className={`side-btn ${view.kind === 'chat' && !activeId ? 'active' : ''}`} onClick={() => newChat()}>
           <Icon name="edit" size={17} /> New chat
+        </button>
+        <button
+          className={`side-btn ${inPanel ? 'active' : ''} ${reviewReady ? '' : 'dimmed'}`}
+          onClick={openThreefold}
+          title={
+            reviewReady
+              ? 'One model answers, the others review, then it writes the final reply'
+              : 'Connect a second provider to turn this on'
+          }
+        >
+          <Icon name="layers" size={17} /> Threefold review
+          {!reviewReady && <span className="side-tag">needs 2 keys</span>}
         </button>
         <button
           className={`side-btn ${view.kind === 'projects' || view.kind === 'project' ? 'active' : ''}`}
@@ -234,14 +256,22 @@ export function Sidebar() {
       <div className="chat-list">
         {shown.length === 0 && (
           <p className="chat-list-empty">
-            {needle ? 'No chats match.' : `No ${MODE_NAME[mode]} chats yet. Start one, or import your history in Settings.`}
+            {needle
+              ? 'No chats match.'
+              : inPanel
+                ? 'No reviewed chats yet.'
+                : `No ${MODE_NAME[mode]} chats yet. Start one, or import your history in Settings.`}
           </p>
         )}
         {groups.map((group) => (
           <div key={group.label} className="chat-group">
             <div className="group-label">{group.label}</div>
             {group.items.map((meta) => (
-              <ChatRow key={meta.id} meta={meta} active={view.kind === 'chat' && meta.id === activeId} />
+              <ChatRow
+                key={meta.id}
+                meta={meta}
+                active={(view.kind === 'chat' || view.kind === 'threefold') && meta.id === activeId}
+              />
             ))}
           </div>
         ))}

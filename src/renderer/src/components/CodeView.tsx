@@ -6,7 +6,7 @@ import { useApp } from '../state'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
 
-const api = window.twofold
+const api = window.threefold
 
 function ToolCard({ item }: { item: Extract<CodeItem, { type: 'tool' }> }) {
   const [open, setOpen] = useState(false)
@@ -240,7 +240,9 @@ export function CodeView() {
                 <p className="lead">
                   {mode === 'claude'
                     ? 'Claude mode runs the Claude Agent SDK (the engine behind Claude Code) with your API key, so the work is billed to your API credits.'
-                    : 'ChatGPT mode runs a coding agent on the OpenAI API with file and shell tools. (Codex itself is not covered by the API credits, so this is a separate agent.)'}
+                    : mode === 'chatgpt'
+                      ? 'ChatGPT mode runs a coding agent on the OpenAI API with file and shell tools. (Codex itself is not covered by the API credits, so this is a separate agent.)'
+                      : 'Gemini mode runs a coding agent on the Gemini API with file and shell tools, billed to your Google credits.'}
                 </p>
                 <p className="muted small">
                   It can read the folder freely. Before it edits a file or runs a command it asks you first.

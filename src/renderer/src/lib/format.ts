@@ -1,7 +1,7 @@
 import type { ConversationMeta, Provider } from '@shared/types'
 
-export const MODE_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT' }
-export const API_NAME: Record<Provider, string> = { claude: 'Anthropic', chatgpt: 'OpenAI' }
+export const MODE_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }
+export const API_NAME: Record<Provider, string> = { claude: 'Anthropic', chatgpt: 'OpenAI', gemini: 'Google' }
 
 export interface ChatGroup {
   label: string
@@ -35,6 +35,7 @@ export function groupByRecency(metas: ConversationMeta[], now = Date.now()): Cha
 export function greeting(mode: Provider, name: string, now = new Date()): string {
   const who = name.trim().split(/\s+/)[0]
   if (mode === 'chatgpt') return who ? `What are we working on, ${who}?` : 'What are we working on?'
+  if (mode === 'gemini') return who ? `Hi ${who}. Where should we start?` : 'Where should we start?'
   const hour = now.getHours()
   const part = hour < 5 ? 'Up late' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening'
   return who ? `${part}, ${who}. What's on your mind?` : `${part}. What's on your mind?`

@@ -57,6 +57,10 @@ export class Secrets {
   }
 
   status(): KeyStatus {
-    return { claude: this.get('claude') !== null, chatgpt: this.get('chatgpt') !== null }
+    return {
+      claude: this.get('claude') !== null,
+      chatgpt: this.get('chatgpt') !== null,
+      gemini: this.get('gemini') !== null,
+    }
   }
 }

@@ -5,8 +5,9 @@ import { fileSize } from '../lib/format'
 import { useApp, type Streaming } from '../state'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
+import { PanelSteps } from './Threefold'
 
-const api = window.twofold
+const api = window.threefold
 
 export function AttachmentChip({ attachment, onRemove }: { attachment: Attachment; onRemove?: () => void }) {
   const isImage = attachment.kind === 'image'
@@ -120,10 +121,10 @@ function Generated({ files }: { files: Attachment[] }) {
 }
 
 /** The small line under a reply: model, tokens and what it cost. */
-export function UsageLine({ usage, live = false }: { usage: Usage; live?: boolean }) {
+export function UsageLine({ usage, live = false, label }: { usage: Usage; live?: boolean; label?: string }) {
   const tokensIn = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
   const parts = [
-    modelLabel(usage.model),
+    label ?? modelLabel(usage.model),
     `${formatTokens(tokensIn)} in`,
     `${formatTokens(usage.outputTokens)} out`,
   ]
@@ -209,6 +210,7 @@ export const MessageView = memo(function MessageView({
   return (
     <div className="msg assistant">
       {message.thinking && <Thinking text={message.thinking} active={false} />}
+      {message.panel && <PanelSteps steps={message.panel} />}
       {message.events && message.events.length > 0 && (
         <div className="events">
           {message.events.map((event) => (
@@ -229,17 +231,23 @@ export const MessageView = memo(function MessageView({
             </button>
           )}
         </div>
-        {message.usage && <UsageLine usage={message.usage} />}
+        {message.usage && (
+          <UsageLine
+            usage={message.usage}
+            label={message.panel ? `${message.panel.filter((step) => step.usage).length} requests` : undefined}
+          />
+        )}
       </div>
     </div>
   )
 })
 
 export function StreamingMessage({ streaming }: { streaming: Streaming }) {
-  const waiting = !streaming.text && streaming.events.length === 0
+  const waiting = !streaming.text && streaming.events.length === 0 && streaming.steps.length === 0
   return (
     <div className="msg assistant streaming">
       <Thinking text={streaming.thinking} active={waiting} />
+      <PanelSteps steps={streaming.steps} live />
       {streaming.events.length > 0 && (
         <div className="events">
           {streaming.events.map((event) => (
@@ -250,7 +258,13 @@ export function StreamingMessage({ streaming }: { streaming: Streaming }) {
       {streaming.text && <Markdown text={streaming.text} streaming />}
       <div className="msg-foot">
         <span className="pulse" aria-label="Replying" />
-        {streaming.usage && <UsageLine usage={streaming.usage} live />}
+        {streaming.usage && (
+          <UsageLine
+            usage={streaming.usage}
+            live
+            label={streaming.steps.length > 0 ? `${streaming.steps.length} request${streaming.steps.length === 1 ? '' : 's'} so far` : undefined}
+          />
+        )}
       </div>
     </div>
   )

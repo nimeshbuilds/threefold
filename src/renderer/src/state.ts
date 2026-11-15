@@ -2,6 +2,7 @@
 // window's working copy plus what is streaming right now.
 
 import { create } from 'zustand'
+import { PROVIDERS } from '@shared/types'
 import type {
   Attachment,
   ChatEvent,
@@ -11,6 +12,8 @@ import type {
   Effort,
   KeyStatus,
   ModelOption,
+  ModelRef,
+  PanelStep,
   Project,
   Provider,
   Settings,
@@ -21,7 +24,7 @@ import type {
 import type { Artifact } from '@shared/artifacts'
 import { DEFAULT_MODEL } from '@shared/pricing'
 
-const api = window.twofold
+const api = window.threefold
 
 export interface Streaming {
   messageId: string
@@ -30,9 +33,16 @@ export interface Streaming {
   thinking: string
   events: ToolEvent[]
   usage: Usage | null
+  /** Threefold chats: the draft, the reviews and the final step as they run. */
+  steps: PanelStep[]
 }
 
-export type View = { kind: 'chat' } | { kind: 'projects' } | { kind: 'project'; id: string } | { kind: 'code' }
+export type View =
+  | { kind: 'chat' }
+  | { kind: 'threefold' }
+  | { kind: 'projects' }
+  | { kind: 'project'; id: string }
+  | { kind: 'code' }
 export type SettingsTab = 'general' | 'keys' | 'credits' | 'usage' | 'memory' | 'import' | 'about'
 
 export interface Draft {
@@ -46,6 +56,26 @@ const emptyDraft = (): Draft => ({
   effort: 'default',
 })
 
+export function connectedProviders(keys: KeyStatus): Provider[] {
+  return PROVIDERS.filter((provider) => keys[provider])
+}
+
+/** Reviewers to start with: the saved choice if it still works, else one model from every other provider. */
+export function defaultReviewers(
+  saved: ModelRef[],
+  keys: KeyStatus,
+  answering: ModelRef,
+  defaults: Record<Provider, string>,
+): ModelRef[] {
+  const usable = saved.filter(
+    (r) => keys[r.provider] && !(r.provider === answering.provider && r.model === answering.model),
+  )
+  if (usable.length > 0) return usable
+  return connectedProviders(keys)
+    .filter((provider) => provider !== answering.provider)
+    .map((provider) => ({ provider, model: defaults[provider] ?? DEFAULT_MODEL[provider] }))
+}
+
 interface State {
   ready: boolean
   settings: Settings | null
@@ -56,6 +86,10 @@ interface State {
   conversation: Conversation | null
   streaming: Record<string, Streaming>
   draft: Draft
+  /** Reviewers chosen for the next Threefold chat. */
+  reviewers: ModelRef[]
+  /** The "every model bills you" notice has been read in this session. */
+  panelNoticeRead: boolean
   projects: Project[]
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
@@ -70,12 +104,16 @@ interface State {
   setMode(mode: Provider): void
   setView(view: View): void
   newChat(projectId?: string): void
+  openThreefold(): void
   openConversation(id: string): Promise<void>
   send(text: string, attachments: Attachment[], truncateFrom?: string): Promise<boolean>
   stop(): void
   regenerate(): void
   editLast(): void
   setModel(model: string): Promise<void>
+  setAnswering(ref: ModelRef): Promise<void>
+  setReviewers(reviewers: ModelRef[]): Promise<void>
+  readPanelNotice(): void
   setTools(patch: Partial<ChatTools>): Promise<void>
   setEffort(effort: Effort): Promise<void>
   renameConversation(id: string, title: string): Promise<void>
@@ -95,19 +133,30 @@ interface State {
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
+export function activeModel(state: Pick<State, 'conversation' | 'settings' | 'mode'>): string {
+  return state.conversation?.model ?? state.settings?.defaultModel[state.mode] ?? DEFAULT_MODEL[state.mode]
+}
+
+/** The reviewers in effect: the open chat's, or the selection for the next one. */
+export function activeReviewers(state: Pick<State, 'conversation' | 'reviewers'>): ModelRef[] {
+  return state.conversation?.panel ? (state.conversation.reviewers ?? []) : state.reviewers
+}
+
 export const useApp = create<State>((set, get) => ({
   ready: false,
   settings: null,
-  keys: { claude: false, chatgpt: false },
+  keys: { claude: false, chatgpt: false, gemini: false },
   mode: 'claude',
   view: { kind: 'chat' },
   metas: [],
   conversation: null,
   streaming: {},
   draft: emptyDraft(),
+  reviewers: [],
+  panelNoticeRead: false,
   projects: [],
   spend: null,
-  models: { claude: [], chatgpt: [] },
+  models: { claude: [], chatgpt: [], gemini: [] },
   artifact: null,
   modal: null,
   settingsTab: 'general',
@@ -115,7 +164,7 @@ export const useApp = create<State>((set, get) => ({
   composerSeed: null,
 
   async init() {
-    const [settings, keys, metas, projects, spend, claudeModels, gptModels] = await Promise.all([
+    const [settings, keys, metas, projects, spend, claude, chatgpt, gemini] = await Promise.all([
       api.settings.get(),
       api.keys.status(),
       api.conversations.list(),
@@ -123,6 +172,7 @@ export const useApp = create<State>((set, get) => ({
       api.usage.summary(),
       api.models.list('claude'),
       api.models.list('chatgpt'),
+      api.models.list('gemini'),
     ])
     set({
       ready: true,
@@ -132,14 +182,21 @@ export const useApp = create<State>((set, get) => ({
       projects,
       spend,
       mode: settings.lastProvider,
-      models: { claude: claudeModels, chatgpt: gptModels },
+      models: { claude, chatgpt, gemini },
       modal: settings.onboarded ? null : 'onboarding',
     })
   },
 
   setMode(mode) {
-    if (get().mode === mode) return
-    set({ mode, conversation: null, view: { kind: 'chat' }, artifact: null, draft: emptyDraft(), composerSeed: null })
+    const state = get()
+    if (state.mode === mode) return
+    // Changing mode starts a fresh chat; the Threefold tab stays open with the new answering provider.
+    const view: View = state.view.kind === 'threefold' ? { kind: 'threefold' } : { kind: 'chat' }
+    set({ mode, conversation: null, view, artifact: null, draft: emptyDraft(), composerSeed: null })
+    if (view.kind === 'threefold') {
+      const answering = { provider: mode, model: state.settings?.defaultModel[mode] ?? DEFAULT_MODEL[mode] }
+      set({ reviewers: get().reviewers.filter((r) => !(r.provider === answering.provider && r.model === answering.model)) })
+    }
     void api.settings.update({ lastProvider: mode })
   },
 
@@ -157,6 +214,34 @@ export const useApp = create<State>((set, get) => ({
     })
   },
 
+  openThreefold() {
+    const state = get()
+    const connected = connectedProviders(state.keys)
+    if (connected.length < 2) {
+      state.openSettings('keys')
+      state.notify('Threefold review needs at least two connected providers. Add another API key to turn it on.')
+      return
+    }
+    // The answering provider is the current mode; move to one that has a key if needed.
+    const mode = state.keys[state.mode] ? state.mode : connected[0]!
+    const defaults = state.settings?.defaultModel ?? DEFAULT_MODEL
+    const answering = { provider: mode, model: defaults[mode] ?? DEFAULT_MODEL[mode] }
+    set({
+      mode,
+      view: { kind: 'threefold' },
+      conversation: null,
+      artifact: null,
+      draft: emptyDraft(),
+      composerSeed: null,
+      reviewers: defaultReviewers(
+        state.reviewers.length > 0 ? state.reviewers : (state.settings?.reviewers ?? []),
+        state.keys,
+        answering,
+        defaults,
+      ),
+    })
+  },
+
   async openConversation(id) {
     const conversation = await api.conversations.get(id)
     if (!conversation) {
@@ -167,7 +252,7 @@ export const useApp = create<State>((set, get) => ({
     set({
       conversation,
       mode: conversation.provider,
-      view: { kind: 'chat' },
+      view: conversation.panel ? { kind: 'threefold' } : { kind: 'chat' },
       artifact: null,
       composerSeed: null,
     })
@@ -178,16 +263,18 @@ export const useApp = create<State>((set, get) => ({
     let conversation = state.conversation
     if (!state.keys[state.mode]) {
       state.openSettings('keys')
-      state.notify(`Add your ${state.mode === 'claude' ? 'Anthropic' : 'OpenAI'} API key to start chatting.`)
+      state.notify('Add an API key for this mode to start chatting.')
       return false
     }
     if (!conversation) {
       // The chat is created on the first message, so abandoned drafts leave nothing behind.
       const model = state.settings?.defaultModel[state.mode] ?? DEFAULT_MODEL[state.mode]
+      const isPanel = state.view.kind === 'threefold'
       conversation = await api.conversations.create({
         provider: state.mode,
-        projectId: state.draft.projectId,
+        projectId: isPanel ? undefined : state.draft.projectId,
         model,
+        ...(isPanel ? { reviewers: state.reviewers } : {}),
       })
       await api.conversations.update(conversation.id, { tools: state.draft.tools, effort: state.draft.effort })
       conversation = { ...conversation, tools: state.draft.tools, effort: state.draft.effort }
@@ -240,7 +327,35 @@ export const useApp = create<State>((set, get) => ({
       set({ settings: next })
       if (!conversation) await api.settings.update({ defaultModel: next.defaultModel })
     }
+    // A model cannot review its own draft.
+    const reviewers = activeReviewers(get())
+    const filtered = reviewers.filter((r) => !(r.provider === mode && r.model === model))
+    if (filtered.length !== reviewers.length) await get().setReviewers(filtered)
     await get().refreshMetas()
+  },
+
+  async setAnswering(ref) {
+    const state = get()
+    if (ref.provider !== state.mode) {
+      // An open chat belongs to one provider; switching provider starts a new one.
+      state.setMode(ref.provider)
+    }
+    await get().setModel(ref.model)
+  },
+
+  async setReviewers(reviewers) {
+    const { conversation } = get()
+    if (conversation?.panel) {
+      set({ conversation: { ...conversation, reviewers }, reviewers })
+      await api.conversations.update(conversation.id, { reviewers })
+    } else {
+      set({ reviewers })
+      await api.settings.update({ reviewers })
+    }
+  },
+
+  readPanelNotice() {
+    set({ panelNoticeRead: true })
   },
 
   async setTools(patch) {
@@ -296,8 +411,12 @@ export const useApp = create<State>((set, get) => ({
   },
 
   async refreshModels() {
-    const [claude, chatgpt] = await Promise.all([api.models.list('claude'), api.models.list('chatgpt')])
-    set({ models: { claude, chatgpt } })
+    const [claude, chatgpt, gemini] = await Promise.all([
+      api.models.list('claude'),
+      api.models.list('chatgpt'),
+      api.models.list('gemini'),
+    ])
+    set({ models: { claude, chatgpt, gemini } })
   },
 
   async updateSettings(patch) {
@@ -332,7 +451,12 @@ export const useApp = create<State>((set, get) => ({
 // ---------- events from the main process ----------
 
 // Text arrives many times a second; collect it and update the screen once per frame.
-const pendingText = new Map<string, { text: string; thinking: string }>()
+interface Pending {
+  text: string
+  thinking: string
+  steps: Map<string, string>
+}
+const pendingText = new Map<string, Pending>()
 let frame = 0
 
 function flushText(): void {
@@ -342,8 +466,17 @@ function flushText(): void {
     const streaming = { ...state.streaming }
     for (const [id, delta] of pendingText) {
       const current = streaming[id]
-      if (current) {
-        streaming[id] = { ...current, text: current.text + delta.text, thinking: current.thinking + delta.thinking }
+      if (!current) continue
+      streaming[id] = {
+        ...current,
+        text: current.text + delta.text,
+        thinking: current.thinking + delta.thinking,
+        steps:
+          delta.steps.size === 0
+            ? current.steps
+            : current.steps.map((step) =>
+                delta.steps.has(step.id) ? { ...step, text: step.text + delta.steps.get(step.id)! } : step,
+              ),
       }
     }
     pendingText.clear()
@@ -351,11 +484,14 @@ function flushText(): void {
   })
 }
 
-function queueText(conversationId: string, kind: 'text' | 'thinking', delta: string): void {
-  const entry = pendingText.get(conversationId) ?? { text: '', thinking: '' }
-  entry[kind] += delta
-  pendingText.set(conversationId, entry)
+function pendingFor(conversationId: string): Pending {
+  let entry = pendingText.get(conversationId)
+  if (!entry) {
+    entry = { text: '', thinking: '', steps: new Map() }
+    pendingText.set(conversationId, entry)
+  }
   if (!frame) frame = requestAnimationFrame(flushText)
+  return entry
 }
 
 function patchStreaming(conversationId: string, patch: (current: Streaming) => Streaming): void {
@@ -390,15 +526,33 @@ export function handleChatEvent(event: ChatEvent): void {
             thinking: '',
             events: [],
             usage: null,
+            steps: [],
           },
         },
       }))
       break
     case 'text':
-      queueText(event.conversationId, 'text', event.delta)
+      pendingFor(event.conversationId).text += event.delta
       break
     case 'thinking':
-      queueText(event.conversationId, 'thinking', event.delta)
+      pendingFor(event.conversationId).thinking += event.delta
+      break
+    case 'step-text': {
+      const pending = pendingFor(event.conversationId)
+      pending.steps.set(event.stepId, (pending.steps.get(event.stepId) ?? '') + event.delta)
+      break
+    }
+    case 'step':
+      // A step snapshot replaces what was streamed for it, so flush first to keep the order right.
+      flushText()
+      patchStreaming(event.conversationId, (current) => {
+        const index = current.steps.findIndex((s) => s.id === event.step.id)
+        const steps = [...current.steps]
+        if (index === -1) steps.push(event.step)
+        // While a step is running its text lives here; the snapshot's text is only final once it has stopped.
+        else steps[index] = event.step.status === 'running' ? { ...event.step, text: steps[index]!.text } : event.step
+        return { ...current, steps }
+      })
       break
     case 'event':
       patchStreaming(event.conversationId, (current) => {
@@ -446,8 +600,4 @@ export function handleChatEvent(event: ChatEvent): void {
       useApp.getState().notify(event.error, 'error')
       break
   }
-}
-
-export function activeModel(state: Pick<State, 'conversation' | 'settings' | 'mode'>): string {
-  return state.conversation?.model ?? state.settings?.defaultModel[state.mode] ?? DEFAULT_MODEL[state.mode]
 }

@@ -8,9 +8,11 @@ import { parseExport } from './importers'
 import type { Store } from './store'
 
 const CONVERSATIONS_FILE = /(^|\/)conversations(-\d+)?\.json$/i
+/** Google Takeout: Takeout/My Activity/Gemini Apps/MyActivity.json */
+const GEMINI_ACTIVITY_FILE = /(^|\/)Gemini[^/]*\/My ?Activity\.json$/i
 const MAX_JSON_BYTES = 1_500_000_000
 
-function readZipEntries(file: string): Promise<string[]> {
+function readZipEntries(file: string, wanted: RegExp): Promise<string[]> {
   return new Promise((resolve, reject) => {
     yauzl.open(file, { lazyEntries: true }, (openError, zip) => {
       if (openError || !zip) {
@@ -21,7 +23,7 @@ function readZipEntries(file: string): Promise<string[]> {
       zip.on('error', reject)
       zip.on('end', () => resolve(contents))
       zip.on('entry', (entry: yauzl.Entry) => {
-        if (!CONVERSATIONS_FILE.test(entry.fileName) || entry.uncompressedSize > MAX_JSON_BYTES) {
+        if (!wanted.test(entry.fileName) || entry.uncompressedSize > MAX_JSON_BYTES) {
           zip.readEntry()
           return
         }
@@ -44,9 +46,16 @@ function readZipEntries(file: string): Promise<string[]> {
   })
 }
 
-async function readExport(file: string): Promise<unknown[]> {
-  const texts = /\.zip$/i.test(file) ? await readZipEntries(file) : [await fs.promises.readFile(file, 'utf8')]
-  if (texts.length === 0) throw new Error('No conversations.json was found in that ZIP file.')
+async function readExport(provider: Provider, file: string): Promise<unknown[]> {
+  const wanted = provider === 'gemini' ? GEMINI_ACTIVITY_FILE : CONVERSATIONS_FILE
+  const texts = /\.zip$/i.test(file) ? await readZipEntries(file, wanted) : [await fs.promises.readFile(file, 'utf8')]
+  if (texts.length === 0) {
+    throw new Error(
+      provider === 'gemini'
+        ? 'No Gemini activity file was found in that ZIP. In Google Takeout choose My Activity, keep only Gemini Apps, and set the format to JSON.'
+        : 'No conversations.json was found in that ZIP file.',
+    )
+  }
   const all: unknown[] = []
   for (const text of texts) {
     const parsed: unknown = JSON.parse(text)
@@ -62,7 +71,7 @@ export async function importExport(store: Store, provider: Provider, file: strin
   const result: ImportResult = { provider, found: 0, imported: 0, updated: 0, skipped: 0, errors: [] }
   let data: unknown[]
   try {
-    data = await readExport(file)
+    data = await readExport(provider, file)
   } catch (error) {
     result.errors.push(error instanceof Error ? error.message : String(error))
     return result

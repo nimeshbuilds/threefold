@@ -1,7 +1,8 @@
-// Turns the official data exports into Twofold conversations.
+// Turns the official data exports into Threefold conversations.
 //
-// Both ChatGPT and Claude let you request a ZIP of your data; each contains a
-// conversations.json file. These parsers are pure so they can be tested without
+// ChatGPT and Claude let you request a ZIP of your data with a conversations.json
+// file inside. Google has no conversation export; Takeout gives an activity log
+// (one record per prompt), which is grouped into chats here. These parsers are pure so they can be tested without
 // Electron. They are deliberately forgiving: unknown message kinds are skipped
 // instead of failing the whole import.
 
@@ -218,6 +219,101 @@ export function parseClaudeConversation(raw: unknown): Conversation | null {
   return conversation
 }
 
+// ---------- Gemini (Google Takeout, My Activity) ----------
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, code: string) => {
+    if (code[0] === '#') {
+      const value = code[1]?.toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10)
+      return Number.isFinite(value) && value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : whole
+    }
+    return ENTITIES[code.toLowerCase()] ?? whole
+  })
+}
+
+/** Turns the HTML that Takeout stores for a reply into readable Markdown. Lossy, but never throws. */
+export function htmlToMarkdown(html: string): string {
+  let text = html.replace(/\r/g, '')
+  text = text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+  text = text.replace(/<pre[^>]*>\s*(?:<code[^>]*>)?([\s\S]*?)(?:<\/code>)?\s*<\/pre>/gi, (_m, code: string) => {
+    return `\n\n\`\`\`\n${code.replace(/<[^>]+>/g, '')}\n\`\`\`\n\n`
+  })
+  text = text.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level: string, inner: string) => {
+    return `\n\n${'#'.repeat(Number(level))} ${inner.trim()}\n\n`
+  })
+  text = text.replace(/<(strong|b)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi, '**$3**')
+  text = text.replace(/<(em|i)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi, '*$3*')
+  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+  text = text.replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+  text = text.replace(/<li[^>]*>/gi, '\n- ').replace(/<\/li>/gi, '')
+  text = text.replace(/<br\s*\/?>/gi, '\n')
+  text = text.replace(/<\/(p|div|ul|ol|table|tr|blockquote)>/gi, '\n\n')
+  text = text.replace(/<\/(td|th)>/gi, ' | ')
+  text = text.replace(/<[^>]+>/g, '')
+  text = decodeEntities(text)
+  return text
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/g, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+const PROMPT_PREFIX = /^(Prompted|Asked|Said)\s+/i
+/** Prompts this far apart are treated as separate chats. */
+const GEMINI_GAP_MS = 30 * 60_000
+
+/**
+ * Builds chats from a Takeout "Gemini Apps" activity file. The file is a flat
+ * list of prompts with their replies and has no notion of a conversation, so
+ * prompts that were close together in time are grouped into one chat.
+ */
+export function parseGeminiActivity(data: unknown): ParsedExport {
+  const result: ParsedExport = { conversations: [], found: 0, errors: [] }
+  if (!Array.isArray(data)) {
+    result.errors.push('The file is not a list of activity records.')
+    return result
+  }
+  const exchanges: Array<{ time: number; prompt: string; reply: string }> = []
+  for (const record of data) {
+    result.found += 1
+    if (!isRecord(record) || typeof record.title !== 'string') continue
+    if (!PROMPT_PREFIX.test(record.title)) continue
+    const prompt = record.title.replace(PROMPT_PREFIX, '').trim()
+    const time = toMs(record.time)
+    const items = Array.isArray(record.safeHtmlItem) ? record.safeHtmlItem : []
+    const reply = items
+      .map((item) => (isRecord(item) && typeof item.html === 'string' ? htmlToMarkdown(item.html) : ''))
+      .filter(Boolean)
+      .join('\n\n')
+    if (!prompt || !time) continue
+    exchanges.push({ time, prompt, reply })
+  }
+  exchanges.sort((a, b) => a.time - b.time)
+
+  let current: Conversation | null = null
+  let lastTime = 0
+  for (const exchange of exchanges) {
+    if (!current || exchange.time - lastTime > GEMINI_GAP_MS) {
+      current = blankConversation('gemini', `imp-gemini-${exchange.time}`, DEFAULT_MODEL.gemini)
+      current.title = exchange.prompt.slice(0, 60)
+      current.createdAt = exchange.time
+      current.origin = 'gemini-export'
+      result.conversations.push(current)
+    }
+    current.messages.push({ id: `${current.id}:${exchange.time}:u`, role: 'user', text: exchange.prompt, createdAt: exchange.time })
+    if (exchange.reply) {
+      current.messages.push({ id: `${current.id}:${exchange.time}:a`, role: 'assistant', text: exchange.reply, createdAt: exchange.time })
+    }
+    current.updatedAt = exchange.time
+    current.messageCount = current.messages.length
+    lastTime = exchange.time
+  }
+  return result
+}
+
 // ---------- entry point ----------
 
 export interface ParsedExport {
@@ -226,13 +322,16 @@ export interface ParsedExport {
   errors: string[]
 }
 
-/** Guesses which app an export came from by looking at the first usable entry. */
+const NAMES: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }
+
+/** Guesses which app an export came from by looking at the first usable entries. */
 export function detectExport(data: unknown): Provider | null {
   if (!Array.isArray(data)) return null
   for (const item of data.slice(0, 20)) {
     if (!isRecord(item)) continue
     if (isRecord(item.mapping)) return 'chatgpt'
     if (Array.isArray(item.chat_messages)) return 'claude'
+    if (typeof item.header === 'string' && typeof item.title === 'string' && 'time' in item) return 'gemini'
   }
   return null
 }
@@ -245,12 +344,13 @@ export function parseExport(provider: Provider, data: unknown): ParsedExport {
   }
   const detected = detectExport(data)
   if (detected && detected !== provider) {
-    const names: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT' }
     result.errors.push(
-      `This looks like a ${names[detected]} export. Switch to ${names[detected]} mode and import it there.`,
+      `This looks like a ${NAMES[detected]} export. Switch to ${NAMES[detected]} mode and import it there.`,
     )
     return result
   }
+  if (provider === 'gemini') return parseGeminiActivity(data)
+
   const parse = provider === 'chatgpt' ? parseChatGPTConversation : parseClaudeConversation
   for (const item of data) {
     result.found += 1

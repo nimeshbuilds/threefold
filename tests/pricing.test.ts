@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MODELS,
   TOOL_FEES,
   addRequest,
   billingCycle,
+  currentRates,
   emptyUsage,
   findModel,
   formatUsd,
@@ -66,7 +68,7 @@ describe('addRequest', () => {
     expect(usage.outputTokens).toBe(600)
     expect(usage.webSearches).toBe(2)
     const tokens = (3000 * 2 + 600 * 10) / M
-    expect(usage.costUsd).toBeCloseTo(tokens + 2 * TOOL_FEES.webSearch, 9)
+    expect(usage.costUsd).toBeCloseTo(tokens + 2 * TOOL_FEES.webSearch.claude, 9)
   })
 
   it('prices a fallback request on the model that actually ran', () => {
@@ -79,6 +81,51 @@ describe('addRequest', () => {
     const usage = addRequest(emptyUsage('mystery'), 'mystery', { inputTokens: 500, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500 })
     expect(usage.priced).toBe(false)
     expect(usage.costUsd).toBe(0)
+  })
+})
+
+describe('Gemini pricing', () => {
+  const tokens = { inputTokens: 1_000_000, cacheReadTokens: 1_000_000, cacheWriteTokens: 0, outputTokens: 1_000_000 }
+
+  it('prices Gemini 4 Hydrogen with its cached rate', () => {
+    expect(tokenCost('gemini-4-hydrogen', tokens)).toBeCloseTo(1.5 + 0.075 + 7.5, 6)
+  })
+
+  it('applies an announced price change from its start date, not before', () => {
+    const before = Date.parse('2026-11-30T23:00:00Z')
+    const after = Date.parse('2026-12-01T00:00:00Z')
+    expect(tokenCost('gemini-4-carbon', tokens, before)).toBeCloseTo(2 + 0.1 + 10, 6)
+    expect(tokenCost('gemini-4-carbon', tokens, after)).toBeCloseTo(4 + 0.2 + 20, 6)
+    expect(tokenCost('gemini-3.8-flash', tokens, after)).toBeCloseTo(0.75 + 0.075 + 3.75, 6)
+    expect(tokenCost('gemini-3.8-flash', tokens, Date.parse('2027-01-02T00:00:00Z'))).toBeCloseTo(1.5 + 0.15 + 7.5, 6)
+  })
+
+  it('reports the rates in force for the settings table', () => {
+    const carbon = MODELS.find((m) => m.id === 'gemini-4-carbon')!
+    expect(currentRates(carbon, Date.parse('2026-11-14T00:00:00Z')).input).toBe(2)
+    expect(currentRates(carbon, Date.parse('2027-03-01T00:00:00Z')).input).toBe(4)
+  })
+
+  it('uses the long-context tier for an older Pro model', () => {
+    const small = tokenCost('gemini-3.1-pro-preview', { inputTokens: 200_000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 })
+    const large = tokenCost('gemini-3.1-pro-preview', { inputTokens: 200_001, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 })
+    expect(small).toBeCloseTo(0.4, 6)
+    expect(large).toBeCloseTo((200_001 * 4) / 1_000_000, 6)
+  })
+
+  it('charges Google Search only beyond the free allowance, at $14 per thousand', () => {
+    const none = { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }
+    const allFree = addRequest(emptyUsage('gemini-4-hydrogen'), 'gemini-4-hydrogen', none, { webSearches: 3, freeWebSearches: 3 })
+    expect(allFree.costUsd).toBe(0)
+    expect(allFree.webSearches).toBe(3)
+    const someBilled = addRequest(emptyUsage('gemini-4-hydrogen'), 'gemini-4-hydrogen', none, { webSearches: 3, freeWebSearches: 1 })
+    expect(someBilled.costUsd).toBeCloseTo(2 * 0.014, 9)
+  })
+
+  it('has every provider represented with a default and a utility model that are priced', () => {
+    for (const provider of ['claude', 'chatgpt', 'gemini'] as const) {
+      expect(MODELS.some((m) => m.provider === provider)).toBe(true)
+    }
   })
 })
 

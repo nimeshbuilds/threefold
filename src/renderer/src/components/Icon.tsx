@@ -1,4 +1,4 @@
-// Twofold's own line icons: 24px grid, 1.75px stroke, round joins.
+// Threefold's own line icons: 24px grid, 1.75px stroke, round joins.
 
 import type { ReactNode } from 'react'
 
@@ -105,6 +105,7 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   file: <path d="M7 3.500h6.500L18.500 8.500v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zM13.500 3.500v5h5" />,
+  layers: <path d="M12 3.500l8.500 4.250-8.500 4.250-8.500-4.250zM3.500 12l8.500 4.250 8.500-4.250M3.500 16.250l8.500 4.250 8.500-4.250" />,
   bolt: <path d="M13 3.500L5.500 13.500h5.500l-1 7 7.500-10h-5.500z" />,
 }
 

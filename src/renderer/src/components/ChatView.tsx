@@ -6,6 +6,7 @@ import { Composer, ModelPicker } from './Composer'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 import { MessageView, StreamingMessage } from './Message'
+import { PanelBar, PanelBilling, PanelNotice } from './Threefold'
 
 /** Running total for the open chat. It ticks up while a reply is streaming. */
 function ChatCost() {
@@ -24,12 +25,12 @@ function ChatCost() {
   )
 }
 
-function TitleEditor() {
+function TitleEditor({ fallback }: { fallback: string }) {
   const conversation = useApp((s) => s.conversation)
   const rename = useApp((s) => s.renameConversation)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
-  if (!conversation) return <span className="topbar-title muted">New chat</span>
+  if (!conversation) return <span className="topbar-title muted">{fallback}</span>
   if (editing) {
     return (
       <input
@@ -64,6 +65,7 @@ function TitleEditor() {
 
 export function ChatView() {
   const mode = useApp((s) => s.mode)
+  const panel = useApp((s) => s.view.kind === 'threefold')
   const conversation = useApp((s) => s.conversation)
   const streaming = useApp((s) => (s.conversation ? s.streaming[s.conversation.id] : undefined))
   const name = useApp((s) => s.settings?.displayName ?? '')
@@ -82,10 +84,11 @@ export function ChatView() {
   const empty = messages.length === 0 && !streaming
 
   // Follow the reply as it grows, unless the reader has scrolled up.
+  const stepChars = streaming?.steps.reduce((sum, step) => sum + step.text.length, 0)
   useLayoutEffect(() => {
     const element = scroller.current
     if (element && pinned.current) element.scrollTop = element.scrollHeight
-  }, [messages.length, streaming?.text, streaming?.thinking, streaming?.events.length])
+  }, [messages.length, streaming?.text, streaming?.thinking, streaming?.events.length, streaming?.steps.length, stepChars])
 
   useEffect(() => {
     pinned.current = true
@@ -97,33 +100,60 @@ export function ChatView() {
   const lastAssistantId = messages.at(-1)?.role === 'assistant' ? messages.at(-1)?.id : undefined
 
   return (
-    <section className={`chat ${empty ? 'chat-empty' : ''}`}>
+    <section className={`chat ${empty ? 'chat-empty' : ''} ${panel ? 'chat-panel' : ''}`}>
       <header className="topbar">
-        {mode === 'chatgpt' && <ModelPicker />}
-        {project && (
+        {panel ? (
+          <span className="panel-badge">
+            <Icon name="layers" size={15} /> Threefold
+          </span>
+        ) : (
+          mode === 'chatgpt' && <ModelPicker />
+        )}
+        {project && !panel && (
           <button className="crumb" onClick={() => setView({ kind: 'project', id: project.id })}>
             <Icon name="folder" size={14} /> {project.name}
           </button>
         )}
-        <TitleEditor />
+        <TitleEditor fallback={panel ? 'New reviewed chat' : 'New chat'} />
         <span className="topbar-spacer" />
         <ChatCost />
       </header>
+      {panel && <PanelBar />}
 
       {empty ? (
         <div className="empty">
           <div className="empty-inner">
-            <Logo size={44} />
-            <h1>{greeting(mode, name)}</h1>
+            {panel ? (
+              <>
+                <span className="empty-icon">
+                  <Icon name="layers" size={34} />
+                </span>
+                <h1>Ask once. Get a reviewed answer.</h1>
+                <p className="lead center">
+                  One model drafts a reply, the others check it for mistakes and gaps, and the first model writes the
+                  final answer with their notes in hand.
+                </p>
+                <PanelNotice />
+              </>
+            ) : (
+              <>
+                <Logo size={44} />
+                <h1>{greeting(mode, name)}</h1>
+              </>
+            )}
             {!hasKey && (
               <button className="btn primary" onClick={() => openSettings('keys')}>
                 <Icon name="key" size={16} /> Add your API key to start
               </button>
             )}
-            <Composer busy={busy} />
-            <p className="empty-hint">
-              Replies are billed to your own API key at API prices. The cost of each message shows as it streams.
-            </p>
+            <Composer busy={busy} panel={panel} />
+            {panel ? (
+              <PanelBilling />
+            ) : (
+              <p className="empty-hint">
+                Replies are billed to your own API key at API prices. The cost of each message shows as it streams.
+              </p>
+            )}
           </div>
         </div>
       ) : (
@@ -137,10 +167,16 @@ export function ChatView() {
             }}
           >
             <div className="thread-inner">
+              {panel && <PanelNotice />}
               {conversation?.origin && (
                 <div className="import-note">
-                  Imported from your {conversation.origin === 'chatgpt-export' ? 'ChatGPT' : 'Claude'} export. New
-                  messages here are sent through the API and stay in Twofold.
+                  Imported from your{' '}
+                  {conversation.origin === 'chatgpt-export'
+                    ? 'ChatGPT'
+                    : conversation.origin === 'gemini-export'
+                      ? 'Gemini'
+                      : 'Claude'}{' '}
+                  export. New messages here are sent through the API and stay in Threefold.
                 </div>
               )}
               {messages.map((message) => (
@@ -156,7 +192,8 @@ export function ChatView() {
             </div>
           </div>
           <div className="composer-dock">
-            <Composer busy={busy} />
+            <Composer busy={busy} panel={panel} />
+            {panel && <PanelBilling />}
           </div>
         </>
       )}

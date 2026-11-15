@@ -4,7 +4,7 @@ import { useApp } from '../state'
 import { Icon } from './Icon'
 import { CopyButton, Markdown } from './Markdown'
 
-const api = window.twofold
+const api = window.threefold
 
 /** Side panel that runs a page or shows a picture the model wrote. */
 export function ArtifactPanel() {
@@ -19,7 +19,7 @@ export function ArtifactPanel() {
     if (!artifact || artifact.kind === 'markdown') return
     let cancelled = false
     void api.artifacts.register(artifactDocument(artifact)).then((id) => {
-      if (!cancelled) setFrameUrl(`twofold://artifact/${id}`)
+      if (!cancelled) setFrameUrl(`threefold://artifact/${id}`)
     })
     return () => {
       cancelled = true

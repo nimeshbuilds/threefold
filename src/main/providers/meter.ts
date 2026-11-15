@@ -6,7 +6,7 @@
 // the provider sends them up front, otherwise an estimate from text length.
 
 import type { Usage } from '@shared/types'
-import { addRequest, emptyUsage, estimateTokens, type TokenCounts } from '@shared/pricing'
+import { addRequest, emptyUsage, estimateTokens, type RequestExtras, type TokenCounts } from '@shared/pricing'
 
 const EMIT_EVERY_MS = 120
 
@@ -49,11 +49,7 @@ export class LiveMeter {
   }
 
   /** The request finished and the provider reported what it billed. */
-  requestFinished(
-    model: string,
-    tokens: TokenCounts,
-    extras: { webSearches?: number; feesUsd?: number } = {},
-  ): void {
+  requestFinished(model: string, tokens: TokenCounts, extras: RequestExtras = {}): void {
     this.confirmed = addRequest(this.confirmed, model, tokens, extras)
     this.current = null
     this.schedule(true)

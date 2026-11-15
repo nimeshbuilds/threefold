@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="Threefold">
+  <defs>
+    <clipPath id="left-sheet"><rect x="4" y="22" width="28" height="28" rx="8"/></clipPath>
+    <clipPath id="right-sheet"><rect x="32" y="22" width="28" height="28" rx="8"/></clipPath>
+  </defs>
+  <rect x="4" y="22" width="28" height="28" rx="8" fill="#C2571A"/>
+  <rect x="32" y="22" width="28" height="28" rx="8" fill="#3B63D9"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#1F2430"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#F2C9A8" clip-path="url(#left-sheet)"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#C9D6F7" clip-path="url(#right-sheet)"/>
+  <text x="74" y="44" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="650" letter-spacing="-0.8" fill="#1F2430">Threefold</text>
+</svg>

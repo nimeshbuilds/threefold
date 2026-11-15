@@ -1,7 +1,11 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
-export type Provider = 'claude' | 'chatgpt'
-export const PROVIDERS: Provider[] = ['claude', 'chatgpt']
+export type Provider = 'claude' | 'chatgpt' | 'gemini'
+export const PROVIDERS: Provider[] = ['claude', 'chatgpt', 'gemini']
+
+export function isProvider(value: unknown): value is Provider {
+  return value === 'claude' || value === 'chatgpt' || value === 'gemini'
+}
 
 export type AttachmentKind = 'image' | 'pdf' | 'text' | 'data'
 
@@ -35,6 +39,27 @@ export interface Usage {
   estimated: boolean
 }
 
+/** One model on one provider. */
+export interface ModelRef {
+  provider: Provider
+  model: string
+}
+
+/**
+ * One step of a Threefold turn: the answering model drafts, the reviewers
+ * critique the draft, then the answering model writes the final reply.
+ */
+export interface PanelStep {
+  id: string
+  role: 'draft' | 'critique' | 'final'
+  provider: Provider
+  model: string
+  text: string
+  status: 'running' | 'done' | 'error' | 'skipped'
+  usage?: Usage
+  error?: string
+}
+
 export type ToolEventKind = 'web_search' | 'web_fetch' | 'code' | 'memory' | 'image' | 'notice'
 
 export interface ToolEvent {
@@ -65,6 +90,8 @@ export interface ChatMessage {
   model?: string
   createdAt: number
   error?: string
+  /** Threefold chats only: the draft, the reviews and the final step. */
+  panel?: PanelStep[]
   /** Provider-native record of this turn, replayed verbatim on later requests. */
   replay?: unknown
   replayProvider?: Provider
@@ -86,8 +113,10 @@ export interface ConversationMeta {
   createdAt: number
   updatedAt: number
   projectId?: string
-  origin?: 'chatgpt-export' | 'claude-export'
+  origin?: 'chatgpt-export' | 'claude-export' | 'gemini-export'
   pinned?: boolean
+  /** A Threefold chat: several models work on each message. */
+  panel?: boolean
   costUsd: number
   messageCount: number
 }
@@ -100,6 +129,8 @@ export interface Conversation extends ConversationMeta {
   /** Provider-side code sandbox reused across turns. */
   containerId?: string
   containerChargedAt?: number
+  /** Threefold chats only: the models that review each draft. */
+  reviewers?: ModelRef[]
   messages: ChatMessage[]
 }
 
@@ -135,12 +166,11 @@ export interface Settings {
   memoryEnabled: boolean
   onboarded: boolean
   displayName: string
+  /** Reviewers last chosen in the Threefold tab. */
+  reviewers: ModelRef[]
 }
 
-export interface KeyStatus {
-  claude: boolean
-  chatgpt: boolean
-}
+export type KeyStatus = Record<Provider, boolean>
 
 export interface LedgerEntry {
   ts: number
@@ -151,6 +181,8 @@ export interface LedgerEntry {
   ref: string
   inputTokens: number
   outputTokens: number
+  /** Web searches made, so a monthly free allowance can be tracked. */
+  webSearches?: number
 }
 
 export interface SpendSummary {
@@ -175,6 +207,8 @@ export type ChatEvent =
   | { type: 'thinking'; conversationId: string; messageId: string; delta: string }
   | { type: 'event'; conversationId: string; messageId: string; event: ToolEvent }
   | { type: 'usage'; conversationId: string; messageId: string; usage: Usage }
+  | { type: 'step'; conversationId: string; messageId: string; step: PanelStep }
+  | { type: 'step-text'; conversationId: string; messageId: string; stepId: string; delta: string }
   | { type: 'done'; conversationId: string; message: ChatMessage; meta: ConversationMeta }
   | { type: 'meta'; conversationId: string; meta: ConversationMeta }
   | { type: 'error'; conversationId: string; messageId?: string; error: string }
@@ -266,9 +300,9 @@ export interface ModelOption {
   priced: boolean
 }
 
-// ---------- the bridge exposed to the renderer as window.twofold ----------
+// ---------- the bridge exposed to the renderer as window.threefold ----------
 
-export interface TwofoldApi {
+export interface ThreefoldApi {
   settings: {
     get(): Promise<Settings>
     update(patch: Partial<Settings>): Promise<Settings>
@@ -284,10 +318,15 @@ export interface TwofoldApi {
   conversations: {
     list(): Promise<ConversationMeta[]>
     get(id: string): Promise<Conversation | null>
-    create(input: { provider: Provider; projectId?: string; model?: string }): Promise<Conversation>
+    create(input: {
+      provider: Provider
+      projectId?: string
+      model?: string
+      reviewers?: ModelRef[]
+    }): Promise<Conversation>
     update(
       id: string,
-      patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId'>>,
+      patch: Partial<Pick<Conversation, 'title' | 'model' | 'tools' | 'effort' | 'pinned' | 'projectId' | 'reviewers'>>,
     ): Promise<ConversationMeta | null>
     remove(id: string): Promise<void>
     search(query: string, provider: Provider): Promise<ConversationMeta[]>

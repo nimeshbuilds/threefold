@@ -2,7 +2,7 @@
 // It exposes named functions, never ipcRenderer itself.
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ChatEvent, CodeEvent, Provider, SpendSummary, TwofoldApi } from '@shared/types'
+import type { ChatEvent, CodeEvent, Provider, SpendSummary, ThreefoldApi } from '@shared/types'
 
 const call =
   (channel: string) =>
@@ -17,7 +17,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): () => vo
   }
 }
 
-const api: TwofoldApi & { onMenu(listener: (command: string) => void): () => void } = {
+const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => void } = {
   settings: { get: call('settings:get'), update: call('settings:update') },
   keys: { status: call('keys:status'), save: call('keys:save'), remove: call('keys:remove') },
   models: { list: call('models:list') },
@@ -38,7 +38,7 @@ const api: TwofoldApi & { onMenu(listener: (command: string) => void): () => voi
     pick: call('attachments:pick'),
     fromPaths: call('attachments:fromPaths'),
     fromData: call('attachments:fromData'),
-    url: (attachment) => `twofold://file/${encodeURIComponent(attachment.file)}`,
+    url: (attachment) => `threefold://file/${encodeURIComponent(attachment.file)}`,
     reveal: call('attachments:reveal'),
     saveAs: call('attachments:saveAs'),
     pathForFile: (file) => webUtils.getPathForFile(file),
@@ -81,4 +81,4 @@ const api: TwofoldApi & { onMenu(listener: (command: string) => void): () => voi
   onMenu: (listener) => subscribe<string>('menu', listener),
 }
 
-contextBridge.exposeInMainWorld('twofold', api)
+contextBridge.exposeInMainWorld('threefold', api)

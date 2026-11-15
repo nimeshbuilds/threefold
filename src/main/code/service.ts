@@ -14,8 +14,9 @@ import type {
 } from '@shared/types'
 import type { Secrets } from '../secrets'
 import type { Store } from '../store'
-import { DEMO } from '../chat'
+import { DEMO, keyHelp } from '../chat'
 import { runClaudeAgent } from './claudeAgent'
+import { runGeminiAgent } from './geminiAgent'
 import { runOpenAIAgent } from './openaiAgent'
 
 export interface AgentContext {
@@ -39,6 +40,12 @@ export interface AgentResult {
   outputTokens: number
   error?: string
   estimated: boolean
+}
+
+const AGENTS: Record<Provider, (ctx: AgentContext) => Promise<AgentResult>> = {
+  claude: runClaudeAgent,
+  chatgpt: runOpenAIAgent,
+  gemini: runGeminiAgent,
 }
 
 export class CodeService {
@@ -110,12 +117,7 @@ export class CodeService {
     if (!prompt.trim()) return { ok: false, error: 'Describe what you want done first.' }
     if (DEMO) return { ok: false, error: 'The Code tab needs a real API key; it is not available in demo mode.' }
     const apiKey = this.secrets.get(session.provider)
-    if (!apiKey) {
-      return {
-        ok: false,
-        error: `Add your ${session.provider === 'claude' ? 'Anthropic' : 'OpenAI'} API key in Settings first.`,
-      }
-    }
+    if (!apiKey) return { ok: false, error: keyHelp(session.provider) }
     if (model) session.model = model
 
     const controller = new AbortController()
@@ -175,7 +177,7 @@ export class CodeService {
 
     let result: AgentResult
     try {
-      result = session.provider === 'claude' ? await runClaudeAgent(context) : await runOpenAIAgent(context)
+      result = await AGENTS[session.provider](context)
     } catch (error) {
       result = {
         costUsd: 0,

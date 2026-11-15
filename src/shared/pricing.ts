@@ -22,6 +22,8 @@ export interface ModelInfo {
   label: string
   blurb: string
   rates: Rates
+  /** Price changes the provider has already announced. `from` is a UTC date, YYYY-MM-DD. */
+  scheduled?: Array<{ from: string; rates: Rates }>
   /** Higher rates that apply once the whole prompt passes `threshold` tokens. */
   longContext?: { threshold: number; rates: Rates }
   /** Prompt size above which the provider charges more, but the rate is not in this table. */
@@ -46,6 +48,22 @@ const gpt = (id: string, label: string, blurb: string, input: number, cached: nu
   rates: { input, output, cacheRead: cached, cacheWrite: input },
   longContextUnknownAbove: 272_000,
 })
+
+/** Gemini bills implicit cache hits at the "context caching" rate and has no separate write rate. */
+const geminiRates = (input: number, cached: number, output: number): Rates => ({
+  input,
+  output,
+  cacheRead: cached,
+  cacheWrite: input,
+})
+
+const gemini = (
+  id: string,
+  label: string,
+  blurb: string,
+  rates: Rates,
+  extra: Partial<ModelInfo> = {},
+): ModelInfo => ({ id, provider: 'gemini', label, blurb, rates, ...extra })
 
 export const MODELS: ModelInfo[] = [
   claude(
@@ -88,23 +106,58 @@ export const MODELS: ModelInfo[] = [
   gpt('gpt-5.4', 'GPT-5.4', 'Older generation', 2.5, 0.25, 15),
   gpt('gpt-5.4-mini', 'GPT-5.4 mini', 'Older generation', 0.75, 0.075, 4.5),
   gpt('gpt-5.4-nano', 'GPT-5.4 nano', 'Older generation', 0.2, 0.02, 1.25),
+  gemini('gemini-4-hydrogen', 'Gemini 4 Hydrogen', 'Best for most work', geminiRates(1.5, 0.075, 7.5)),
+  gemini(
+    'gemini-4-argon',
+    'Gemini 4 Argon',
+    'Efficient frontier model',
+    // Introductory price; Google's page lists the doubled rate from 1 December 2026.
+    geminiRates(2, 0.1, 10),
+    { scheduled: [{ from: '2026-12-01', rates: geminiRates(4, 0.2, 20) }] },
+  ),
+  gemini(
+    'gemini-4-carbon',
+    'Gemini 4 Carbon',
+    'Most capable',
+    geminiRates(2, 0.1, 10),
+    { scheduled: [{ from: '2026-12-01', rates: geminiRates(4, 0.2, 20) }] },
+  ),
+  gemini(
+    'gemini-3.8-flash',
+    'Gemini 3.8 Flash',
+    'Fast and capable',
+    geminiRates(0.75, 0.075, 3.75),
+    { scheduled: [{ from: '2027-01-01', rates: geminiRates(1.5, 0.15, 7.5) }] },
+  ),
+  gemini('gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite', 'Quickest and cheapest', geminiRates(0.3, 0.03, 2.5)),
+  gemini(
+    'gemini-3.1-pro-preview',
+    'Gemini 3.1 Pro',
+    'Older generation',
+    geminiRates(2, 0.2, 12),
+    { longContext: { threshold: 200_000, rates: geminiRates(4, 0.4, 18) } },
+  ),
 ]
 
 export const DEFAULT_MODEL: Record<Provider, string> = {
   claude: 'claude-opus-5-5',
   chatgpt: 'gpt-6.1-sol',
+  gemini: 'gemini-4-hydrogen',
 }
 
 /** Cheapest model per provider, used for small background jobs such as naming a chat. */
 export const UTILITY_MODEL: Record<Provider, string> = {
   claude: 'claude-haiku-5-5',
   chatgpt: 'gpt-6-luna',
+  gemini: 'gemini-3.5-flash-lite',
 }
 
 /** Flat fees charged per tool call, in USD. */
 export const TOOL_FEES = {
-  /** Both providers list web search at $10 per 1,000 calls. */
-  webSearch: 0.01,
+  /** Price of one web search. Anthropic and OpenAI list $10 per 1,000; Google lists $14 per 1,000. */
+  webSearch: { claude: 0.01, chatgpt: 0.01, gemini: 0.014 } satisfies Record<Provider, number>,
+  /** Google includes this many searches a month before the fee applies. */
+  geminiFreeSearchesPerMonth: 5000,
   /** OpenAI code interpreter: $0.03 per 1 GB container session (20 minutes). */
   openaiContainerSession: 0.03,
   openaiContainerMinutes: 20,
@@ -121,6 +174,15 @@ export function modelLabel(id: string): string {
   return findModel(id)?.label ?? id
 }
 
+/** The base rates in force at `now`, taking announced price changes into account. */
+export function currentRates(model: ModelInfo, now = Date.now()): Rates {
+  let rates = model.rates
+  for (const change of [...(model.scheduled ?? [])].sort((a, b) => a.from.localeCompare(b.from))) {
+    if (now >= Date.parse(`${change.from}T00:00:00Z`)) rates = change.rates
+  }
+  return rates
+}
+
 export interface TokenCounts {
   inputTokens: number
   cacheReadTokens: number
@@ -129,12 +191,14 @@ export interface TokenCounts {
 }
 
 /** Cost in USD of one request's tokens on one model. Returns null when the model is not priced. */
-export function tokenCost(modelId: string, t: TokenCounts): number | null {
+export function tokenCost(modelId: string, t: TokenCounts, now = Date.now()): number | null {
   const model = findModel(modelId)
   if (!model) return null
   const promptTokens = t.inputTokens + t.cacheReadTokens + t.cacheWriteTokens
   const rates =
-    model.longContext && promptTokens > model.longContext.threshold ? model.longContext.rates : model.rates
+    model.longContext && promptTokens > model.longContext.threshold
+      ? model.longContext.rates
+      : currentRates(model, now)
   return (
     (t.inputTokens * rates.input +
       t.cacheReadTokens * rates.cacheRead +
@@ -159,19 +223,24 @@ export function emptyUsage(model: string): Usage {
   }
 }
 
+export interface RequestExtras {
+  webSearches?: number
+  /** How many of those searches fall inside a free allowance. */
+  freeWebSearches?: number
+  feesUsd?: number
+}
+
 /**
  * Adds one request to a running turn total. `model` may differ from the turn's
  * model when the provider fell back to another model for this request.
  */
-export function addRequest(
-  usage: Usage,
-  model: string,
-  tokens: TokenCounts,
-  extras: { webSearches?: number; feesUsd?: number } = {},
-): Usage {
+export function addRequest(usage: Usage, model: string, tokens: TokenCounts, extras: RequestExtras = {}): Usage {
   const cost = tokenCost(model, tokens)
   const webSearches = extras.webSearches ?? 0
-  const fees = (extras.feesUsd ?? 0) + webSearches * TOOL_FEES.webSearch
+  const billable = Math.max(0, webSearches - (extras.freeWebSearches ?? 0))
+  const provider = findModel(model)?.provider ?? findModel(usage.model)?.provider
+  const searchFee = provider ? TOOL_FEES.webSearch[provider] : TOOL_FEES.webSearch.claude
+  const fees = (extras.feesUsd ?? 0) + billable * searchFee
   return {
     ...usage,
     inputTokens: usage.inputTokens + tokens.inputTokens,

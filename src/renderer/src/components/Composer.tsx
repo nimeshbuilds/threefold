@@ -7,7 +7,7 @@ import { Icon } from './Icon'
 import { AttachmentChip } from './Message'
 import { Popover } from './Popover'
 
-const api = window.twofold
+const api = window.threefold
 
 const EFFORTS: Array<{ id: Effort; label: string; hint: string }> = [
   { id: 'default', label: 'Standard', hint: "The model's own default" },
@@ -24,8 +24,8 @@ export function ModelPicker() {
   return (
     <Popover
       className="model-picker"
-      align={mode === 'claude' ? 'right' : 'left'}
-      side={mode === 'claude' ? 'top' : 'bottom'}
+      align={mode === 'chatgpt' ? 'left' : 'right'}
+      side={mode === 'chatgpt' ? 'bottom' : 'top'}
       trigger={({ toggle }) => (
         <button className="model-button" onClick={toggle} title="Choose a model">
           <span>{modelLabel(model)}</span>
@@ -121,7 +121,9 @@ function ToolsMenu() {
   )
 }
 
-export function Composer({ busy }: { busy: boolean }) {
+const PLACEHOLDER = { claude: 'Write to Claude…', chatgpt: 'Ask anything', gemini: 'Ask Gemini' } as const
+
+export function Composer({ busy, panel = false }: { busy: boolean; panel?: boolean }) {
   const mode = useApp((s) => s.mode)
   const send = useApp((s) => s.send)
   const stop = useApp((s) => s.stop)
@@ -240,7 +242,7 @@ export function Composer({ busy }: { busy: boolean }) {
         ref={textarea}
         value={text}
         rows={1}
-        placeholder={mode === 'claude' ? 'Write to Claude…' : 'Ask anything'}
+        placeholder={panel ? 'Ask for a reviewed answer' : PLACEHOLDER[mode]}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -265,14 +267,14 @@ export function Composer({ busy }: { busy: boolean }) {
             if (picked.length > 0) setAttachments((current) => [...current, ...picked])
           }}
         >
-          <Icon name={mode === 'claude' ? 'paperclip' : 'plus'} size={18} />
+          <Icon name={mode === 'chatgpt' ? 'plus' : 'paperclip'} size={18} />
         </button>
         <ToolsMenu />
         {tools.webSearch && <span className="tool-pill"><Icon name="globe" size={13} /> Search</span>}
         {tools.codeExec && <span className="tool-pill"><Icon name="terminal" size={13} /> Code</span>}
         {tools.imageGen && mode === 'chatgpt' && <span className="tool-pill"><Icon name="image" size={13} /> Images</span>}
         <span className="composer-spacer" />
-        {mode === 'claude' && <ModelPicker />}
+        {mode !== 'chatgpt' && !panel && <ModelPicker />}
         {busy ? (
           <button className="send-btn stop" onClick={stop} title="Stop">
             <Icon name="stop" size={18} />

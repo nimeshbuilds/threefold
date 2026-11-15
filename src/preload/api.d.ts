@@ -1,8 +1,8 @@
-import type { TwofoldApi } from '@shared/types'
+import type { ThreefoldApi } from '@shared/types'
 
 declare global {
   interface Window {
-    twofold: TwofoldApi & { onMenu(listener: (command: string) => void): () => void }
+    threefold: ThreefoldApi & { onMenu(listener: (command: string) => void): () => void }
   }
 }
 

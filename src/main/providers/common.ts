@@ -23,6 +23,8 @@ export interface TurnContext {
   system: string
   project: Project | null
   memoryEnabled: boolean
+  /** Web searches this provider has already been asked for this calendar month. */
+  searchesThisMonth: number
   signal: AbortSignal
   emit: {
     text(delta: string): void
@@ -62,8 +64,12 @@ export function memoryText(input: unknown): string | null {
   return text.trim()
 }
 
-const PROVIDER_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT' }
-const PROVIDER_API: Record<Provider, string> = { claude: 'the Anthropic API', chatgpt: 'the OpenAI API' }
+const PROVIDER_NAME: Record<Provider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }
+const PROVIDER_API: Record<Provider, string> = {
+  claude: 'the Anthropic API',
+  chatgpt: 'the OpenAI API',
+  gemini: "Google's Gemini API",
+}
 
 export function buildSystemPrompt(input: {
   provider: Provider
@@ -82,7 +88,7 @@ export function buildSystemPrompt(input: {
     day: 'numeric',
   })
   const parts: string[] = [
-    `You are a helpful assistant in Twofold, a desktop chat app that connects to ${PROVIDER_API[provider]} with the user's own API key. ` +
+    `You are a helpful assistant in Threefold, a desktop chat app that connects to ${PROVIDER_API[provider]} with the user's own API key. ` +
       `This conversation is in ${PROVIDER_NAME[provider]} mode. Today is ${today}.`,
     'Write in Markdown. Use fenced code blocks with a language tag for code. Be direct and match the length of the answer to the question.',
     'When the user asks for a web page, an interactive demo, a diagram or a graphic, put the complete, self-contained file in ONE fenced code block tagged `html` or `svg`. ' +

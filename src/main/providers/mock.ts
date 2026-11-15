@@ -1,8 +1,9 @@
 // Demo provider. It makes no network calls and costs nothing.
-// Start the app with TWOFOLD_DEMO=1 to try the interface without API keys;
+// Start the app with THREEFOLD_DEMO=1 to try the interface without API keys;
 // the automated UI test uses it too.
 
 import { estimateTokens } from '@shared/pricing'
+import { REVIEWER_SYSTEM, REVISION_OPENING } from '../panel'
 import { EventLog, type TurnContext, type TurnResult } from './common'
 import { LiveMeter } from './meter'
 
@@ -33,6 +34,18 @@ const ARTIFACT = `Here is a small page you can open in the preview panel:
 
 The panel on the right runs it in a sandbox.`
 
+const REVIEW = `Mostly right. Two things to fix:
+
+1. The second step skips an edge case: say what happens when the list is empty.
+2. The closing claim is stronger than the evidence given. Soften it or add a source.`
+
+const FINAL = `Here is the **final answer**, revised after review (demo mode, so nothing was charged).
+
+- The empty-list case is now covered.
+- The closing claim is stated with the right amount of confidence.
+
+In a real Threefold chat this text comes from your answering model, after it has read every review.`
+
 function reply(prompt: string, mode: string): string {
   if (/page|html|artifact|demo/i.test(prompt)) return ARTIFACT
   return (
@@ -53,8 +66,9 @@ export async function runMockTurn(ctx: TurnContext): Promise<TurnResult> {
   const log = new EventLog(ctx.emit.event)
   const last = ctx.history[ctx.history.length - 1]
   const prompt = last?.text ?? ''
-  const mode = ctx.conversation.provider === 'claude' ? 'Claude' : 'ChatGPT'
-  const full = reply(prompt, mode)
+  const mode = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini' }[ctx.conversation.provider]
+  const full =
+    ctx.system === REVIEWER_SYSTEM ? REVIEW : prompt.startsWith(REVISION_OPENING) ? FINAL : reply(prompt, mode)
   const historyChars = ctx.history.reduce((sum, m) => sum + m.text.length, 0) + ctx.system.length
   const inputTokens = estimateTokens(historyChars)
   let text = ''
