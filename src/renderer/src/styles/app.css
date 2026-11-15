@@ -2510,3 +2510,55 @@ button.panel-chip:hover:not(:disabled) {
   font-size: 13px;
   color: var(--text-2);
 }
+
+/* ---------- deep research ---------- */
+
+button.tool-pill {
+  cursor: pointer;
+}
+
+.tool-pill.research {
+  background: var(--ember);
+  color: #fff;
+}
+
+.composer-note.research {
+  align-items: flex-start;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ember) 9%, transparent);
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+.composer-note.research .icon {
+  margin-top: 2px;
+  color: var(--ember);
+}
+
+.research-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ember) 12%, transparent);
+  color: var(--ember);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  user-select: none;
+}
+
+.provider-missing {
+  white-space: normal;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  margin-bottom: 4px;
+}
+
+.provider-missing .mode-dot {
+  opacity: 0.4;
+}

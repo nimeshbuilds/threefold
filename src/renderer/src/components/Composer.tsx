@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Attachment, Effort } from '@shared/types'
+import { IMAGE_PROVIDERS, type Attachment, type Effort, type Provider } from '@shared/types'
 import { findModel, modelLabel } from '@shared/pricing'
 import { MODE_NAME } from '../lib/format'
 import { activeModel, useApp } from '../state'
@@ -66,13 +66,36 @@ export function ModelPicker() {
   )
 }
 
+/** What deep research means on each provider, and what to expect on the bill. */
+const RESEARCH_HINT: Record<Provider, string> = {
+  claude: 'Searches and reads for minutes, then writes a cited report',
+  chatgpt: 'Runs in the background for minutes, then writes a cited report',
+  gemini: "Google's Deep Research agent. About $1 to $3 a run",
+}
+
+/** Shown above the message box while deep research is switched on. */
+const RESEARCH_NOTE: Record<Provider, string> = {
+  claude: 'Claude will search and read for several minutes at its highest effort, which uses many more tokens than a normal reply.',
+  chatgpt: 'The model will search and read for several minutes at its highest effort, running on OpenAI in the background (OpenAI stores this response).',
+  gemini: "Google's Deep Research agent will run for several minutes; Google estimates $1 to $3 a run, and stores the run.",
+}
+
+const IMAGE_HINT: Partial<Record<Provider, string>> = {
+  chatgpt: 'Billed separately by OpenAI; not in the meter',
+  gemini: 'About $0.03 an image, counted in the meter',
+}
+
 function ToolsMenu() {
   const mode = useApp((s) => s.mode)
   const tools = useApp((s) => s.conversation?.tools ?? s.draft.tools)
   const effort = useApp((s) => s.conversation?.effort ?? s.draft.effort)
+  const research = useApp((s) => s.researchNext)
+  const setResearch = useApp((s) => s.setResearchNext)
   const setTools = useApp((s) => s.setTools)
   const setEffort = useApp((s) => s.setEffort)
-  const activeCount = Number(tools.webSearch) + Number(tools.codeExec) + Number(tools.imageGen)
+  const canImage = IMAGE_PROVIDERS.includes(mode)
+  const activeCount =
+    Number(tools.webSearch) + Number(tools.codeExec) + Number(tools.imageGen && canImage) + Number(research)
 
   const toggle = (key: 'webSearch' | 'codeExec' | 'imageGen', icon: string, label: string, hint: string) => (
     <button className="menu-item tool-item" onClick={() => void setTools({ [key]: !tools[key] })} role="menuitemcheckbox" aria-checked={tools[key]}>
@@ -97,10 +120,25 @@ function ToolsMenu() {
     >
       {() => (
         <>
+          <div className="menu-label">For the next message</div>
+          <button
+            className="menu-item tool-item"
+            onClick={() => setResearch(!research)}
+            role="menuitemcheckbox"
+            aria-checked={research}
+          >
+            <Icon name="search" size={17} />
+            <span className="model-item-main">
+              <strong>Deep research</strong>
+              <small>{RESEARCH_HINT[mode]}</small>
+            </span>
+            <span className={`switch ${research ? 'on' : ''}`} />
+          </button>
+          <div className="menu-sep" />
           <div className="menu-label">Tools</div>
-          {toggle('webSearch', 'globe', 'Web search', '$0.01 per search, plus tokens')}
+          {toggle('webSearch', 'globe', 'Web search', mode === 'gemini' ? 'Google Search; also opens pages and links' : '$0.01 per search, plus tokens')}
           {toggle('codeExec', 'terminal', 'Code execution', 'Runs code in a sandbox; reads data files')}
-          {mode === 'chatgpt' && toggle('imageGen', 'image', 'Image generation', 'Billed separately; not in the meter')}
+          {canImage && toggle('imageGen', 'image', 'Image generation', IMAGE_HINT[mode] ?? '')}
           <div className="menu-sep" />
           <div className="menu-label">Thinking</div>
           <div className="effort-row">
@@ -132,6 +170,8 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
   const notify = useApp((s) => s.notify)
   const conversationId = useApp((s) => s.conversation?.id ?? null)
   const tools = useApp((s) => s.conversation?.tools ?? s.draft.tools)
+  const research = useApp((s) => s.researchNext)
+  const setResearch = useApp((s) => s.setResearchNext)
 
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -227,6 +267,14 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
           </button>
         </div>
       )}
+      {research && (
+        <div className="composer-note research">
+          <Icon name="search" size={14} />
+          {panel
+            ? 'Deep research is on: the draft is a full research run, the reviewers can search the web to check it, and the final rewrite can search too. Expect several minutes and a few dollars across providers.'
+            : `Deep research is on for this message. ${RESEARCH_NOTE[mode]} The cost shows live.`}
+        </div>
+      )}
       {attachments.length > 0 && (
         <div className="composer-attachments">
           {attachments.map((attachment) => (
@@ -270,9 +318,14 @@ export function Composer({ busy, panel = false }: { busy: boolean; panel?: boole
           <Icon name={mode === 'chatgpt' ? 'plus' : 'paperclip'} size={18} />
         </button>
         <ToolsMenu />
-        {tools.webSearch && <span className="tool-pill"><Icon name="globe" size={13} /> Search</span>}
+        {research && (
+          <button className="tool-pill research" onClick={() => setResearch(false)} title="Deep research is on for the next message. Click to turn it off.">
+            <Icon name="search" size={13} /> Deep research <Icon name="close" size={11} />
+          </button>
+        )}
+        {tools.webSearch && !research && <span className="tool-pill"><Icon name="globe" size={13} /> Search</span>}
         {tools.codeExec && <span className="tool-pill"><Icon name="terminal" size={13} /> Code</span>}
-        {tools.imageGen && mode === 'chatgpt' && <span className="tool-pill"><Icon name="image" size={13} /> Images</span>}
+        {tools.imageGen && IMAGE_PROVIDERS.includes(mode) && <span className="tool-pill"><Icon name="image" size={13} /> Images</span>}
         <span className="composer-spacer" />
         {mode !== 'chatgpt' && !panel && <ModelPicker />}
         {busy ? (

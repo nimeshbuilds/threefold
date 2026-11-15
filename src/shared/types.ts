@@ -60,7 +60,7 @@ export interface PanelStep {
   error?: string
 }
 
-export type ToolEventKind = 'web_search' | 'web_fetch' | 'code' | 'memory' | 'image' | 'notice'
+export type ToolEventKind = 'web_search' | 'web_fetch' | 'code' | 'memory' | 'image' | 'research' | 'notice'
 
 export interface ToolEvent {
   id: string
@@ -90,6 +90,8 @@ export interface ChatMessage {
   model?: string
   createdAt: number
   error?: string
+  /** User messages only: this message was sent as a deep research request. */
+  research?: boolean
   /** Threefold chats only: the draft, the reviews and the final step. */
   panel?: PanelStep[]
   /** Provider-native record of this turn, replayed verbatim on later requests. */
@@ -104,6 +106,9 @@ export interface ChatTools {
   codeExec: boolean
   imageGen: boolean
 }
+
+/** Which providers can generate images through their API. Anthropic's API has no image model. */
+export const IMAGE_PROVIDERS: Provider[] = ['chatgpt', 'gemini']
 
 export interface ConversationMeta {
   id: string
@@ -217,6 +222,8 @@ export interface SendRequest {
   conversationId: string
   text: string
   attachments: Attachment[]
+  /** Run this message as deep research: a long, multi-step web investigation that ends in a cited report. */
+  research?: boolean
   /** Replace the conversation from this message id onward (edit or regenerate). */
   truncateFrom?: string
 }

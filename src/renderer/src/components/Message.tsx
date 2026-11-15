@@ -56,6 +56,7 @@ const EVENT_ICON: Record<ToolEvent['kind'], string> = {
   code: 'terminal',
   memory: 'memory',
   image: 'image',
+  research: 'search',
   notice: 'info',
 }
 
@@ -194,6 +195,11 @@ export const MessageView = memo(function MessageView({
           </div>
         )}
         {message.text && <div className="bubble">{message.text}</div>}
+        {message.research && (
+          <span className="research-tag">
+            <Icon name="search" size={12} /> Deep research
+          </span>
+        )}
         <div className="msg-actions">
           <CopyAction text={message.text} />
           {isLastUser && !busy && (

@@ -1,6 +1,6 @@
 {
   "name": "threefold",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Threefold \u2014 a local desktop app for Claude, ChatGPT and Gemini that runs on your own API keys and shows what every message costs.",
   "main": "./out/main/index.js",
   "author": "nimeshbuilds",

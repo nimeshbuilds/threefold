@@ -50,6 +50,43 @@ export interface TurnResult {
   containerChargedAt?: number
 }
 
+/**
+ * Appended to a user message that was sent as deep research, for the providers
+ * that research with their ordinary chat model (Claude and ChatGPT). It is added
+ * the same way every time the message is replayed, so the conversation prefix
+ * stays byte-identical between requests.
+ */
+export const RESEARCH_BRIEF =
+  '\n\n<research_mode>\n' +
+  'Treat this as a deep research task. Work out the questions that need answering, search widely, read primary sources, ' +
+  'and cross-check every important claim against independent sources. Keep going until the evidence is solid. ' +
+  'Then write a well-structured report: a short summary first, then the findings with specific facts, figures and dates, ' +
+  'each with an inline citation. Say plainly what you could not confirm and where sources disagree.\n' +
+  '</research_mode>'
+
+/** The text of a user message as a research-capable chat model should see it. */
+export function userText(message: Pick<ChatMessage, 'text' | 'research'>): string {
+  return message.research ? message.text + RESEARCH_BRIEF : message.text
+}
+
+/** True when the message being answered was sent as deep research. */
+export function isResearch(history: ChatMessage[]): boolean {
+  return history[history.length - 1]?.research === true
+}
+
+export const IMAGE_TOOL_NAME = 'generate_image'
+export const IMAGE_TOOL_DESCRIPTION =
+  'Create an image from a text description and show it to the user. Use it when the user asks for a picture, ' +
+  'illustration, logo, diagram rendering or photo. Write a detailed prompt: subject, style, composition, lighting and any text to include.'
+
+/** Validates the arguments of a generate_image call. Returns the prompt, or null when they are malformed. */
+export function imagePrompt(input: unknown): string | null {
+  if (typeof input !== 'object' || input === null) return null
+  const prompt = (input as Record<string, unknown>).prompt
+  if (typeof prompt !== 'string' || !prompt.trim()) return null
+  return prompt.trim().slice(0, 4000)
+}
+
 export const MEMORY_TOOL_NAME = 'save_memory'
 export const MEMORY_TOOL_DESCRIPTION =
   'Save one short fact about the user that will be useful in future conversations ' +

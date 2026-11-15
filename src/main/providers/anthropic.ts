@@ -16,8 +16,10 @@ import {
   addCitation,
   describeError,
   fileBlockText,
+  isResearch,
   memoryText,
   prepareAttachment,
+  userText,
   type TurnContext,
   type TurnResult,
 } from './common'
@@ -146,7 +148,7 @@ async function buildMessages(client: Anthropic, ctx: TurnContext, plain: boolean
   for (const message of ctx.history) {
     if (message.role === 'user') {
       const blocks = await attachmentBlocks(client, ctx, message.attachments)
-      if (message.text) blocks.push({ type: 'text', text: message.text })
+      if (message.text) blocks.push({ type: 'text', text: userText(message) })
       if (blocks.length === 0) continue
       messages.push({ role: 'user', content: blocks })
       continue
@@ -167,7 +169,8 @@ async function buildMessages(client: Anthropic, ctx: TurnContext, plain: boolean
 
 function buildTools(ctx: TurnContext): ToolUnion[] {
   const tools: ToolUnion[] = []
-  if (ctx.conversation.tools.webSearch) {
+  // Deep research always searches and reads the web, whatever the toggle says.
+  if (ctx.conversation.tools.webSearch || isResearch(ctx.history)) {
     tools.push({ type: 'web_search_20260209', name: 'web_search' })
     tools.push({ type: 'web_fetch_20260209', name: 'web_fetch' })
   }
@@ -268,6 +271,19 @@ export async function runClaudeTurn(ctx: TurnContext): Promise<TurnResult> {
   const generated: Attachment[] = []
   const state: StreamState = { text: '', thinking: '', lastBlock: '' }
   const tools = buildTools(ctx)
+  // Anthropic has no separate research endpoint: deep research is the chat model at its
+  // highest practical effort, with web search and web fetch, following the research brief.
+  const research = isResearch(ctx.history)
+  if (research) {
+    log.upsert({
+      id: 'research',
+      kind: 'research',
+      title: 'Deep research',
+      detail: 'Searching, reading sources and cross-checking. This can take several minutes.',
+      status: 'running',
+    })
+  }
+  const maxLoops = research ? MAX_LOOPS * 3 : MAX_LOOPS
   const turn: MessageParam[] = []
   let servedBy = requestedModel
   let containerId = ctx.conversation.containerId
@@ -304,7 +320,11 @@ export async function runClaudeTurn(ctx: TurnContext): Promise<TurnResult> {
               block_binding: { prefix_mismatch_behavior: 'drop_block' },
             },
         ...(tools.length > 0 ? { tools } : {}),
-        ...(ctx.conversation.effort !== 'default' ? { output_config: { effort: ctx.conversation.effort } } : {}),
+        ...(research
+          ? { output_config: { effort: 'xhigh' as const } }
+          : ctx.conversation.effort !== 'default'
+            ? { output_config: { effort: ctx.conversation.effort } }
+            : {}),
         ...(!safeMode && caps?.fallbacks ? { fallbacks: 'default' as const } : {}),
         ...(!safeMode && containerId && ctx.conversation.tools.codeExec ? { container: containerId } : {}),
         ...(betas.length > 0 ? { betas } : {}),
@@ -420,7 +440,7 @@ export async function runClaudeTurn(ctx: TurnContext): Promise<TurnResult> {
   }
 
   try {
-    for (let loop = 0; loop < MAX_LOOPS; loop++) {
+    for (let loop = 0; loop < maxLoops; loop++) {
       let final: BetaMessage
       try {
         final = await streamOnce()

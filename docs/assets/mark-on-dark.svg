@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Threefold">
+  <defs>
+    <clipPath id="left-sheet"><rect x="4" y="22" width="28" height="28" rx="8"/></clipPath>
+    <clipPath id="right-sheet"><rect x="32" y="22" width="28" height="28" rx="8"/></clipPath>
+  </defs>
+  <rect x="4" y="22" width="28" height="28" rx="8" fill="#E08A4F"/>
+  <rect x="32" y="22" width="28" height="28" rx="8" fill="#8FABF5"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#EDE9DF"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#8A4A22" clip-path="url(#left-sheet)"/>
+  <rect x="18" y="14" width="28" height="28" rx="8" fill="#3F5488" clip-path="url(#right-sheet)"/>
+</svg>

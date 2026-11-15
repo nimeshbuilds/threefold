@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Threefold — Claude, ChatGPT and Gemini in one local app, on your own API credits</title>
+  <meta name="description" content="Threefold is a local Mac app with a Claude mode, a ChatGPT mode and a Gemini mode. It runs on your own API keys, spends the API credits your plans already include, and shows what every message costs while it is written.">
+  <meta name="theme-color" content="#f7f4ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1b19" media="(prefers-color-scheme: dark)">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Threefold — three assistants, one local app, your own API credits">
+  <meta property="og:description" content="A local Mac app for Claude, ChatGPT and Gemini that runs on your API keys and shows every message's cost live.">
+  <meta property="og:image" content="https://nimeshbuilds.github.io/threefold/assets/icon-512.png">
+  <meta property="og:url" content="https://nimeshbuilds.github.io/threefold/">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="brand" href="./" aria-label="Threefold home">
+      <picture>
+        <source srcset="assets/mark-on-dark.svg" media="(prefers-color-scheme: dark)">
+        <img src="assets/mark.svg" width="30" height="30" alt="">
+      </picture>
+      <span>Threefold</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#modes">Modes</a>
+      <a href="#review">Review</a>
+      <a href="#research">Research</a>
+      <a href="#cost">Cost</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/nimeshbuilds/threefold">GitHub</a>
+    </nav>
+    <span class="status-pill">In development</span>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <p class="eyebrow">A local app for macOS</p>
+      <h1>Three assistants.<br>One local app.<br><span class="accent">Your own API credits.</span></h1>
+      <p class="lede">
+        Paid Claude, ChatGPT and Google AI plans now come with monthly API credits that their own apps cannot spend.
+        Threefold gives those credits somewhere to go: a Claude mode, a ChatGPT mode and a Gemini mode on your Mac,
+        with the cost of every message shown while it is being written.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="https://github.com/nimeshbuilds/threefold">Get the source on GitHub</a>
+        <a class="button" href="#setup">See how setup works</a>
+      </div>
+      <p class="fineprint">No account, no server, no telemetry. Runs from source today; there is no packaged download yet.</p>
+
+      <div class="showcase" data-showcase>
+        <div class="tabs" role="tablist" aria-label="Screens">
+          <button role="tab" aria-selected="true" data-shot="claude-reply" data-alt="Claude mode: a reply on a warm paper background, with its cost and token counts under it and a monthly credit meter in the sidebar">Claude mode</button>
+          <button role="tab" aria-selected="false" data-shot="chatgpt-reply" data-alt="ChatGPT mode: the same layout in a neutral white theme with the model picker in the top bar">ChatGPT mode</button>
+          <button role="tab" aria-selected="false" data-shot="gemini-reply" data-alt="Gemini mode: a cool blue-tinted theme with the Gemini spend meter in the sidebar">Gemini mode</button>
+          <button role="tab" aria-selected="false" data-shot="threefold-done" data-alt="Threefold review: an answer with its draft, two reviews and final step listed above it, each with its own cost">Threefold review</button>
+          <button role="tab" aria-selected="false" data-shot="research" data-alt="Deep research: a message tagged as deep research, answered with a structured report, its sources and its cost">Deep research</button>
+        </div>
+        <figure class="window">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img id="shot" src="screenshots/claude-reply.png" width="1280" height="840" alt="Claude mode: a reply on a warm paper background, with its cost and token counts under it and a monthly credit meter in the sidebar">
+        </figure>
+        <p class="caption">Screens from demo mode, which is why the replies describe themselves as canned.</p>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="credits-title">
+      <h2 id="credits-title">The credits your plan already includes</h2>
+      <p class="section-lede">Each company adds API credit to its paid plans. None of them lets you spend it in its own app.</p>
+      <div class="credit-grid">
+        <article class="credit ember">
+          <h3>Claude</h3>
+          <dl>
+            <div><dt>Max</dt><dd>$100 a month</dd></div>
+            <div><dt>Ultra</dt><dd>$200 a month</dd></div>
+            <div><dt>Team</dt><dd>pooled, up to $500</dd></div>
+          </dl>
+          <p>Expires each billing cycle. <a href="https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans">Anthropic's guide</a></p>
+        </article>
+        <article class="credit ink">
+          <h3>ChatGPT</h3>
+          <dl>
+            <div><dt>Pro</dt><dd>$100, $200 or $500</dd></div>
+            <div><dt>Business</dt><dd>pooled, up to $500</dd></div>
+            <div><dt>Plus</dt><dd>none</dd></div>
+          </dl>
+          <p>Expires each billing cycle. <a href="https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions">OpenAI's guide</a></p>
+        </article>
+        <article class="credit tide">
+          <h3>Gemini</h3>
+          <dl>
+            <div><dt>Google AI Pro</dt><dd>$10 a month</dd></div>
+            <div><dt>Ultra 5x</dt><dd>$40 a month</dd></div>
+            <div><dt>Ultra 20x</dt><dd>$100 a month</dd></div>
+          </dl>
+          <p>Valid for 12 months, after a $5 prepayment. <a href="https://aistudio.google.com/learn/claim-google-ai-plan-credits-in-ai-studio">Google's guide</a></p>
+        </article>
+      </div>
+      <p class="fineprint center">Amounts as published by each company in November 2026. They set these and can change them; check the linked guides.</p>
+    </section>
+
+    <section id="modes" aria-labelledby="modes-title">
+      <h2 id="modes-title">Three modes that each feel like home</h2>
+      <p class="section-lede">Every mode has its own look, chat list and model picker, so you always know which API your message is going to.</p>
+      <div class="mode-grid">
+        <article class="mode ember">
+          <span class="dot"></span>
+          <h3>Claude mode</h3>
+          <p>Warm paper and a serif reading face. Runs on the Anthropic API.</p>
+        </article>
+        <article class="mode ink">
+          <span class="dot"></span>
+          <h3>ChatGPT mode</h3>
+          <p>Neutral and clean, with image generation. Runs on the OpenAI API.</p>
+        </article>
+        <article class="mode tide">
+          <span class="dot"></span>
+          <h3>Gemini mode</h3>
+          <p>Cool and rounded, with Google Search and image generation. Runs on the Gemini API.</p>
+        </article>
+      </div>
+      <ul class="features">
+        <li><strong>Chat that streams</strong>, with a model picker and visible thinking.</li>
+        <li><strong>Files in, answers out:</strong> images, PDFs and text in any mode.</li>
+        <li><strong>Web search and code execution</strong>, switched on per chat.</li>
+        <li><strong>Deep research</strong> in every mode: minutes of searching and reading, then a cited report.</li>
+        <li><strong>Image generation</strong> in ChatGPT and Gemini modes. (Anthropic's API has no image model.)</li>
+        <li><strong>A preview panel</strong> that runs pages and graphics the model writes, in a sandbox.</li>
+        <li><strong>Projects and memory</strong> that carry across chats, and memory across all three modes.</li>
+        <li><strong>A coding agent</strong> for a folder you choose. It asks before every edit and command.</li>
+        <li><strong>Your history:</strong> import the data export from each official app and carry on.</li>
+        <li><strong>One sidebar meter</strong> per provider, counting down this month's credits.</li>
+      </ul>
+      <p class="fineprint">Not included: voice, video generation, the official apps' connectors, and syncing chats back to the official apps.</p>
+    </section>
+
+    <section id="review" class="band" aria-labelledby="review-title">
+      <h2 id="review-title">Threefold review: one question, a checked answer</h2>
+      <p class="section-lede">Connect two or more providers and a fourth tab turns on. You choose who answers and who reviews, from every provider you have a key for. Every message then takes three steps.</p>
+      <ol class="steps">
+        <li>
+          <span class="num">1</span>
+          <h3>Draft</h3>
+          <p>Your answering model replies, as it would in a normal chat.</p>
+        </li>
+        <li>
+          <span class="num">2</span>
+          <h3>Review</h3>
+          <p>The other models read the draft and list what is wrong or missing. They run at the same time.</p>
+        </li>
+        <li>
+          <span class="num">3</span>
+          <h3>Final</h3>
+          <p>The answering model rewrites its reply with every review in hand. That is what you read.</p>
+        </li>
+      </ol>
+      <div class="split">
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/threefold-notice.png" width="1280" height="840" loading="lazy" alt="The Threefold review tab on first open, with a notice that names the answering model and both reviewers and says each provider bills for its part">
+        </figure>
+        <div class="honest">
+          <h3>It costs more, and the app says so first</h3>
+          <p>
+            Each step is a separate API request. The answering model is billed twice and every reviewer once, each by
+            its own provider. So a message here costs a few times what a normal one does.
+          </p>
+          <p>
+            Threefold tells you this every time the tab opens, names each provider and how many requests it will get,
+            and lists the cost of every step under the answer.
+          </p>
+          <p>If a reviewer fails, the others are still used. If none comes back, you get the draft and are told it was not reviewed.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="research" aria-labelledby="research-title">
+      <h2 id="research-title">Deep research, in every mode and under review</h2>
+      <p class="section-lede">Switch it on for one message. The model plans its questions, searches widely, reads the sources and writes a report with citations. Each provider does this its own way, so Threefold uses each one's own route.</p>
+      <div class="mode-grid">
+        <article class="mode ember">
+          <span class="dot"></span>
+          <h3>Claude mode</h3>
+          <p>Claude at its highest practical effort with web search and page reading. Anthropic has no separate research endpoint, so this is the chat model working longer.</p>
+        </article>
+        <article class="mode ink">
+          <span class="dot"></span>
+          <h3>ChatGPT mode</h3>
+          <p>Your chosen model at its highest reasoning effort with uncapped web search, run in OpenAI's background mode so a long run survives a dropped connection.</p>
+        </article>
+        <article class="mode tide">
+          <span class="dot"></span>
+          <h3>Gemini mode</h3>
+          <p>Google's Deep Research agent. Google estimates one to three dollars for a typical run.</p>
+        </article>
+      </div>
+      <div class="split">
+        <div class="honest">
+          <h3>A report that gets checked</h3>
+          <p>
+            In Threefold review, deep research makes the draft a full research run. The reviewers may search the web
+            themselves to check its claims and sources, and the answering model then rewrites the report with their
+            findings.
+          </p>
+          <p>
+            A run takes several minutes and can cost a few dollars across the providers involved. The app says so
+            before you send, and the running cost is on screen the whole time.
+          </p>
+        </div>
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/threefold-research.png" width="1280" height="840" loading="lazy" alt="A researched answer in Threefold review, with a reviewer's critique of the report opened">
+        </figure>
+      </div>
+    </section>
+
+    <section id="cost" class="band" aria-labelledby="cost-title">
+      <h2 id="cost-title">The cost is on screen while it happens</h2>
+      <div class="split reverse">
+        <div>
+          <ul class="ticks">
+            <li><strong>Per reply.</strong> Model, tokens in and out, and the price, under every answer.</li>
+            <li><strong>Per chat.</strong> A running total in the top bar. It ticks up as the reply streams and settles on the exact figure when the API reports the final token counts.</li>
+            <li><strong>Per month.</strong> A meter in the sidebar counts down from your plan's credit grant and shows the days until it renews.</li>
+            <li><strong>Per model and per day.</strong> A breakdown for each provider in Settings.</li>
+          </ul>
+          <p class="note">
+            Estimates are marked with "≈". Threefold counts what it spends itself; it cannot read your real balance, and
+            a few fees are not counted. The details are written down, not hidden.
+          </p>
+        </div>
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/spend.png" width="1280" height="840" loading="lazy" alt="The Spend tab: amount spent this cycle, today, and credits left, with a table of tokens and cost per model">
+        </figure>
+      </div>
+    </section>
+
+    <section id="setup" aria-labelledby="setup-title">
+      <h2 id="setup-title">Setup is three steps per provider</h2>
+      <p class="section-lede">A short wizard walks you through it on first launch. Connect one, two or all three.</p>
+      <ol class="setup">
+        <li>
+          <h3>Claim your credits</h3>
+          <p>In the official app's billing settings (or Google AI Studio), link your plan to an API account. This is where the monthly credit lands.</p>
+        </li>
+        <li>
+          <h3>Create an API key</h3>
+          <p>On that provider's developer console, in the same account. It takes a minute.</p>
+        </li>
+        <li>
+          <h3>Paste it into Threefold</h3>
+          <p>The key is checked with a free request and stored encrypted on your Mac. You never type it anywhere else.</p>
+        </li>
+      </ol>
+      <p class="fineprint center">No plan credits? It still works. Usage is then billed to the payment method on your API account.</p>
+    </section>
+
+    <section id="privacy" class="band" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Yours, on your machine</h2>
+      <div class="privacy-grid">
+        <article>
+          <h3>No middleman</h3>
+          <p>Requests go from your Mac straight to Anthropic, OpenAI and Google. There is no Threefold server, account or telemetry.</p>
+        </article>
+        <article>
+          <h3>Keys stay encrypted</h3>
+          <p>API keys are encrypted with a key held in the macOS Keychain. Chats, projects and memory are plain files in a folder you can back up.</p>
+        </article>
+        <article>
+          <h3>Agents ask first</h3>
+          <p>The coding agents read only the folder you choose and ask before every file edit and every command.</p>
+        </article>
+      </div>
+      <p class="note">Each provider's own API data policy still applies to what you send it. In a Threefold review, your message and the draft go to every reviewer's provider. Deep research runs on ChatGPT and Gemini are stored by that provider, because their long-running modes require it.</p>
+    </section>
+
+    <section class="status" aria-labelledby="status-title">
+      <h2 id="status-title">Where it stands</h2>
+      <p>
+        Threefold is in development and built in public. It runs today from source and as an unsigned Mac build.
+        Its interface, cost tracking and review engine are covered by automated tests; testing against the live APIs
+        is in progress. <strong>There is no packaged download yet.</strong>
+      </p>
+      <p><a class="button primary" href="https://github.com/nimeshbuilds/threefold">Source on GitHub</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand">
+      <picture>
+        <source srcset="assets/mark-on-dark.svg" media="(prefers-color-scheme: dark)">
+        <img src="assets/mark.svg" width="24" height="24" alt="">
+      </picture>
+      <span>Threefold</span>
+    </div>
+    <p class="built-by">
+      <img src="assets/nimeshbuilds.png" width="22" height="22" alt="">
+      <span>Built in public by Nimesh under <a href="https://github.com/nimeshbuilds">NimeshBuilds on GitHub</a>.</span>
+    </p>
+    <p>
+      Threefold is an independent project. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or
+      Google. "Claude", "ChatGPT" and "Gemini" are trademarks of their owners and are used here only to say which API
+      a mode connects to.
+    </p>
+  </footer>
+
+  <script src="site.js" defer></script>
+</body>
+</html>

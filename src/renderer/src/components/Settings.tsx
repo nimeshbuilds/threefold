@@ -571,7 +571,10 @@ export function SettingsModal() {
                 <tbody>
                   {MODELS.map((model) => (
                     <tr key={model.id}>
-                      <td>{model.label}</td>
+                      <td>
+                        {model.label}
+                        {model.imageOutput !== undefined && ` (images $${model.imageOutput})`}
+                      </td>
                       <td>${currentRates(model).input}</td>
                       <td>${currentRates(model).cacheRead}</td>
                       <td>${currentRates(model).output}</td>

@@ -8,6 +8,8 @@ Threefold is a desktop app for macOS with a Claude mode, a ChatGPT mode and a Ge
 
 It exists because paid Claude, ChatGPT and Google AI plans now include monthly API credits that the official apps cannot spend. Threefold gives those credits somewhere to go.
 
+[Website](https://nimeshbuilds.github.io/threefold/) · Built in public by Nimesh under [NimeshBuilds](https://github.com/nimeshbuilds)
+
 > Threefold is an independent project. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or Google. "Claude", "ChatGPT" and "Gemini" are trademarks of their owners and are used only to say which API a mode connects to.
 
 ![Claude mode with a reply and its cost](docs/screenshots/claude-reply.png)
@@ -18,16 +20,15 @@ It exists because paid Claude, ChatGPT and Google AI plans now include monthly A
 |---|---|---|---|
 | Chat with streaming, model picker, thinking | Yes | Yes | Yes |
 | Images, PDFs and text files in a message | Yes | Yes | Yes |
-| Web search | Yes | Yes | Yes (Google Search) |
+| Web search | Yes, and it reads pages | Yes, and it reads pages | Yes (Google Search), and it reads pages |
 | Code execution | Yes, with data files and charts | Yes, with data files and charts | Yes, CSV and TSV files only |
-| Image generation | No | Yes | No |
+| Deep research | Yes | Yes | Yes (Google's Deep Research agent) |
+| Image generation | No: Anthropic's API has no image model | Yes | Yes |
 | Live preview panel for pages and SVGs | Yes | Yes | Yes |
 | Projects (instructions and reference files) | Yes | Yes | Yes |
 | Memory across chats, shared by every mode | Yes | Yes | Yes |
 | Coding agent in a project folder | Claude Agent SDK | Threefold's own agent | Threefold's own agent |
 | Import history from a data export | Yes | Yes | Activity log, grouped into chats |
-
-Not included: voice, the official apps' connectors, and syncing chats back to the official apps.
 
 | ChatGPT mode | Gemini mode |
 |---|---|
@@ -37,7 +38,7 @@ Screenshots are from demo mode, which is why the replies describe themselves as 
 
 ### Threefold review
 
-Once two or more providers are connected, the **Threefold review** tab turns on. You pick an answering model and one or more reviewers, from any connected provider. Each message then runs in three steps:
+Once two or more providers are connected, the **Threefold review** tab turns on. You pick an answering model and up to four reviewers, from every provider you have a key for: with three keys you can answer with one and have the other two review, or any other mix. Each message then runs in three steps:
 
 1. **Draft.** The answering model replies.
 2. **Review.** Every reviewer reads the draft and lists what is wrong or missing. Reviews run at the same time.
@@ -46,6 +47,39 @@ Once two or more providers are connected, the **Threefold review** tab turns on.
 ![A reviewed answer with its steps and their costs](docs/screenshots/threefold-done.png)
 
 Every step is a separate API request and **every model you pick bills you for its part**: the answering model twice, each reviewer once. The tab says so when it opens, names each provider, and lists the cost of every step under the answer. If a reviewer fails, the others are still used; if none comes back, you get the draft and are told it was not reviewed.
+
+### Deep research
+
+Switch on **Deep research** (the sliders button) for one message. The model plans its questions, searches widely, reads the sources and writes a cited report. It switches itself off after that message. Each provider's API does this differently, so each mode uses its provider's own route:
+
+| Mode | How it runs | What to expect |
+|---|---|---|
+| Claude | The chat model at `xhigh` effort with web search and web fetch. Anthropic has no separate research endpoint. | Several minutes; many more tokens than a normal reply |
+| ChatGPT | Your chosen model at `xhigh` reasoning effort with uncapped web search, in OpenAI's background mode. | Several minutes; OpenAI stores the response, because background mode requires it |
+| Gemini | Google's Deep Research agent on the Interactions API. | Usually under 20 minutes; Google estimates $1 to $3 a run, and stores the run |
+
+In **Threefold review**, deep research makes the draft a full research run. The reviewers may then search the web themselves to check the report's claims and sources, and the answering model rewrites it with their findings (with web search available, but not as a second research run).
+
+![A research report with its sources and cost](docs/screenshots/research.png)
+
+### What each API offers, and what Threefold uses
+
+Checked against each provider's documentation and SDK in November 2026.
+
+| Capability | Anthropic | OpenAI | Google | In Threefold |
+|---|---|---|---|---|
+| Web search | Yes | Yes | Yes | All three modes |
+| Open and read a web page | Web fetch | Part of web search | URL context | All three modes, with web search |
+| Code execution sandbox | Yes | Code interpreter | Yes | All three modes |
+| Deep research | No endpoint; done with the chat model | No dedicated model any more; done with a reasoning model in background mode | Deep Research agent | All three modes, and Threefold review |
+| Image generation | No | Yes | Yes (Nano Banana) | ChatGPT and Gemini modes |
+| Memory | Memory tool | No built-in | No built-in | Threefold's own, shared by every mode |
+| Remote MCP connectors | Yes | Yes | Yes | Not yet |
+| File search over uploaded documents | No | Yes | Yes | Not yet (projects send files directly) |
+| Office file creation (slides, sheets) | Agent Skills | Through code interpreter | Through code execution | Not yet |
+| Computer or browser use | Yes | Yes | Yes | No |
+| Voice, live audio | No | Realtime | Live | No |
+| Video and music generation | No | Yes | Yes | No |
 
 ### Cost, live
 
@@ -112,7 +146,9 @@ Things to know:
 - **Prices change.** Price changes a provider has already announced are in the table and take effect on their start date (for example Gemini 4 Carbon and Argon double on 1 December 2026). Anything else needs an edit to `pricing.ts`. A model that is not in the table shows "cost unknown" and is not counted.
 - **Estimates are marked.** While a reply streams, output tokens are estimated from text length. A reply you stop early keeps its estimate.
 - **Web search:** $0.01 per search on Anthropic and OpenAI. Google includes 5,000 searches a month and then charges $0.014 each; Threefold counts its own searches against that allowance.
-- **Not counted:** OpenAI image generation, Anthropic code-execution container time beyond its free allowance, and OpenAI long-context pricing above 272K prompt tokens (flagged with a "+" when it applies). OpenAI's code sandbox is counted at $0.03 per 20-minute session, which is an approximation.
+- **Deep research on Gemini is an estimate.** Google bills its research agent at "standard Gemini list rates" without naming the model. Threefold prices the reported tokens at the Gemini 4 Carbon rate, which matches Google's own cost examples, and marks the figure with "≈". No cost is shown while a Gemini research run is in progress, because Google reports usage only at the end.
+- **Images:** Gemini images are counted (about $0.03 each at the default size). OpenAI image generation is not counted, because the API does not report its cost with the reply.
+- **Also not counted:** Anthropic code-execution container time beyond its free allowance, and OpenAI long-context pricing above 272K prompt tokens (flagged with a "+" when it applies). OpenAI's code sandbox is counted at $0.03 per 20-minute session, which is an approximation.
 - **Long chats cost more per message.** Each request resends the conversation. Caching cuts the cost of the repeated part, but it still grows.
 - **Google's credits roll over** for 12 months, unlike the other two. The meter still counts one month at a time.
 
@@ -121,7 +157,8 @@ Things to know:
 - No Threefold server, account or telemetry. Requests go from your computer to the Anthropic, OpenAI and Google APIs and nowhere else.
 - API keys are encrypted with Electron `safeStorage`, which keeps its encryption key in the macOS Keychain.
 - Chats, projects, memory and the spend ledger are plain JSON files in `~/Library/Application Support/Threefold/data`.
-- OpenAI requests are sent with `store: false`. Each provider's normal API data policies still apply; note that Google may use free-tier (unbilled) Gemini API content to improve its products.
+- Ordinary OpenAI requests are sent with `store: false`. **Deep research is the exception:** OpenAI's background mode and Google's research agent both require the run to be stored on their side.
+- Each provider's normal API data policies apply; note that Google may use free-tier (unbilled) Gemini API content to improve its products.
 - In a Threefold review, your message and the draft answer are sent to every reviewer's provider.
 - The window runs sandboxed with context isolation. Pages the model writes are previewed in a sandboxed frame with no access to the app.
 - The coding agents can read the project folder you choose. They ask before every file edit and every shell command, and Threefold's own agents cannot touch paths outside that folder.
@@ -150,21 +187,24 @@ pnpm test:e2e
 | `src/shared/pricing.ts` | Price table and cost maths |
 | `src/renderer/` | The React interface |
 | `tests/live/` | Checks against the real APIs (run by hand, see below) |
+| `docs/` | The website, served by GitHub Pages |
 | `brand/` | Logo, icon and the brand guide |
 
 ## What has and has not been tested
 
 **Tested automatically, with no API key:**
 
-- 88 unit tests: price maths including announced price changes, the three export parsers, storage and the spend ledger, file-tool path confinement, the cost meter, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up).
-- 56 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
+- 101 unit tests: price maths including announced price changes and image pricing, the three export parsers, storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
+- 67 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
 
-**Not yet run against the real APIs.** The provider code is written against the official SDK type definitions and documentation and compiles against them, but no request with a real key has been made from this repository. A live suite is ready for that:
+**Not run against the real APIs by the automated tests.** The provider code is written against the official SDK type definitions and documentation and compiles against them. A live suite is ready for checking it with your own keys:
 
 ```bash
 ANTHROPIC_API_KEY=... OPENAI_API_KEY=... GEMINI_API_KEY=... pnpm test:live
 ```
 
-Set any subset of the three keys. For each provider it checks the key, streaming and exact cost, the default model, multi-turn context, image and file input, the memory tool, web search, code execution, stopping mid-reply and chat naming, then runs one Threefold review across the providers you supplied. It uses the cheapest models where it can and prints what it spent, which should be a few cents.
+Set any subset of the three keys. For each provider it checks the key, streaming and exact cost, the default model, multi-turn context, image and file input, the memory tool, web search, code execution, image generation, stopping mid-reply and chat naming, then runs one Threefold review across the providers you supplied. It uses the cheapest models where it can and prints what it spent, which should be well under a dollar.
+
+Deep research is left out of that run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
 
 Also not verified: the Gemini importer against a real Takeout file (it is tested against the documented record shape), and the three coding agents against real projects.

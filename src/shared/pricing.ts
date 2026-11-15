@@ -30,6 +30,10 @@ export interface ModelInfo {
   longContextUnknownAbove?: number
   /** Claude only: the model accepts the server-side `fallbacks` parameter. */
   fallbacks?: boolean
+  /** Used by a feature (deep research, image generation), not offered in the model picker. */
+  internal?: boolean
+  /** Image models: USD per 1M image output tokens, billed apart from text output. */
+  imageOutput?: number
 }
 
 const claude = (
@@ -130,6 +134,16 @@ export const MODELS: ModelInfo[] = [
     { scheduled: [{ from: '2027-01-01', rates: geminiRates(1.5, 0.15, 7.5) }] },
   ),
   gemini('gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite', 'Quickest and cheapest', geminiRates(0.3, 0.03, 2.5)),
+  // Google bills its Deep Research agent at "standard Gemini list rates" without naming the model.
+  // Its own cost estimates match the Gemini 4 Carbon rates, so those are used and the result is marked as an estimate.
+  gemini('deep-research-preview-04-2026', 'Gemini Deep Research', 'Research agent', geminiRates(2, 0.1, 10), {
+    internal: true,
+    scheduled: [{ from: '2026-12-01', rates: geminiRates(4, 0.2, 20) }],
+  }),
+  gemini('gemini-nano-banana-2.1', 'Nano Banana 2.1', 'Image generation', geminiRates(1.5, 1.5, 7.5), {
+    internal: true,
+    imageOutput: 30,
+  }),
   gemini(
     'gemini-3.1-pro-preview',
     'Gemini 3.1 Pro',
@@ -144,6 +158,11 @@ export const DEFAULT_MODEL: Record<Provider, string> = {
   chatgpt: 'gpt-6.1-sol',
   gemini: 'gemini-4-hydrogen',
 }
+
+/** Gemini's deep research runs on an agent, not on the chat model. */
+export const GEMINI_RESEARCH_AGENT = 'deep-research-preview-04-2026'
+/** Gemini's image model. */
+export const GEMINI_IMAGE_MODEL = 'gemini-nano-banana-2.1'
 
 /** Cheapest model per provider, used for small background jobs such as naming a chat. */
 export const UTILITY_MODEL: Record<Provider, string> = {
@@ -204,6 +223,23 @@ export function tokenCost(modelId: string, t: TokenCounts, now = Date.now()): nu
       t.cacheReadTokens * rates.cacheRead +
       t.cacheWriteTokens * rates.cacheWrite +
       t.outputTokens * rates.output) /
+    1_000_000
+  )
+}
+
+/** Cost of one image-model request: text tokens at the text rates, image tokens at the image rate. */
+export function imageCost(
+  modelId: string,
+  tokens: { inputTokens: number; textOutputTokens: number; imageOutputTokens: number },
+  now = Date.now(),
+): number | null {
+  const model = findModel(modelId)
+  if (!model || model.imageOutput === undefined) return null
+  const rates = currentRates(model, now)
+  return (
+    (tokens.inputTokens * rates.input +
+      tokens.textOutputTokens * rates.output +
+      tokens.imageOutputTokens * model.imageOutput) /
     1_000_000
   )
 }

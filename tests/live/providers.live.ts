@@ -11,6 +11,7 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { IMAGE_PROVIDERS } from '@shared/types'
 import type { ChatMessage, ChatTools, Conversation, ModelRef, PanelStep, Provider, ToolEvent, Usage } from '@shared/types'
 import { DEFAULT_MODEL, MODELS, UTILITY_MODEL, formatUsd } from '@shared/pricing'
 import { runPanelTurn } from '../../src/main/panel'
@@ -33,6 +34,7 @@ const RUN: Record<Provider, (ctx: TurnContext) => Promise<TurnResult>> = {
 const VERIFY = { claude: verifyClaudeKey, chatgpt: verifyOpenAIKey, gemini: verifyGeminiKey }
 const TITLE = { claude: claudeTitle, chatgpt: openaiTitle, gemini: geminiTitle }
 const NO_TOOLS: ChatTools = { webSearch: false, codeExec: false, imageGen: false }
+const RESEARCH = process.env.THREEFOLD_LIVE_RESEARCH === '1'
 
 let dir: string
 let store: Store
@@ -91,6 +93,7 @@ async function turn(
     model?: string
     tools?: Partial<ChatTools>
     memory?: boolean
+    research?: boolean
     attachments?: ChatMessage['attachments']
     history?: ChatMessage[]
     signal?: AbortSignal
@@ -103,7 +106,14 @@ async function turn(
   }
   const history: ChatMessage[] = [
     ...(options.history ?? []),
-    { id: `u-${Date.now()}`, role: 'user', text: options.text, attachments: options.attachments, createdAt: Date.now() },
+    {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      text: options.text,
+      attachments: options.attachments,
+      research: options.research || undefined,
+      createdAt: Date.now(),
+    },
   ]
   const events: ToolEvent[] = []
   const liveUsages: Usage[] = []
@@ -255,6 +265,37 @@ for (const provider of ['claude', 'chatgpt', 'gemini'] as const) {
       expect(result.text.length).toBeGreaterThan(0)
       expect(result.usage.estimated).toBe(true)
     })
+
+    it.skipIf(!IMAGE_PROVIDERS.includes(provider))('generates an image', async () => {
+      const { result, events } = await turn(provider, 'image generation', {
+        model: DEFAULT_MODEL[provider],
+        tools: { imageGen: true },
+        text: 'Create a simple image of a red circle on a white background.',
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.generated.length).toBeGreaterThan(0)
+      expect(result.generated[0]!.kind).toBe('image')
+      expect(store.readAttachment(result.generated[0]!).byteLength).toBeGreaterThan(1000)
+      expect(events.some((e) => e.kind === 'image' && e.status === 'done')).toBe(true)
+    })
+
+    // Deep research takes minutes and costs real money (Google estimates $1 to $3 a run on Gemini),
+    // so it only runs when asked for: THREEFOLD_LIVE_RESEARCH=1.
+    it.skipIf(!RESEARCH)(
+      'runs deep research and returns a report with sources',
+      async () => {
+        const { result, events } = await turn(provider, 'deep research', {
+          research: true,
+          text: 'What is the current LTS version of Node.js and when does its support end? Keep the report under 300 words.',
+        })
+        expect(result.error).toBeUndefined()
+        expect(result.text.length).toBeGreaterThan(200)
+        expect(result.text).toMatch(/https?:\/\/|\[\d+\]/)
+        expect(events.some((e) => e.kind === 'research')).toBe(true)
+        expect(result.usage.costUsd).toBeGreaterThan(0)
+      },
+      45 * 60_000,
+    )
 
     it('names a chat', async () => {
       const named = await TITLE[provider](KEYS[provider]!, 'How do I bake sourdough bread at home?', 'Start with a mature starter…')

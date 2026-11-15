@@ -2,7 +2,7 @@
 // These are its controls, its billing notice and the per-step breakdown.
 
 import { useState } from 'react'
-import type { ModelRef, PanelStep, Provider } from '@shared/types'
+import { PROVIDERS, type ModelRef, type PanelStep, type Provider } from '@shared/types'
 import { findModel, formatUsd, modelLabel } from '@shared/pricing'
 import { API_NAME, MODE_NAME } from '../lib/format'
 import { activeModel, activeReviewers, connectedProviders, useApp } from '../state'
@@ -41,8 +41,21 @@ function GroupedModels({
   onPick: (ref: ModelRef) => void
 }) {
   const models = useApp((s) => s.models)
+  const openSettings = useApp((s) => s.openSettings)
+  // Providers without a saved key are listed too, so it is clear why they cannot be picked.
+  const missing = PROVIDERS.filter((provider) => !providers.includes(provider))
   return (
     <div className="grouped-models">
+      {missing.map((provider) => (
+        <button key={provider} className="menu-item provider-missing" onClick={() => openSettings('keys')}>
+          <span className={`mode-dot mode-${provider}`} />
+          <span className="model-item-main">
+            <strong>{MODE_NAME[provider]} is not connected</strong>
+            <small>Add its API key to use {MODE_NAME[provider]} models here</small>
+          </span>
+          <Icon name="key" size={15} />
+        </button>
+      ))}
       {providers.map((provider) => (
         <div key={provider}>
           <div className="menu-label">
@@ -197,6 +210,11 @@ export function PanelNotice() {
           {list(billing.map((entry) => `${API_NAME[entry.provider]} for ${entry.count}`))}. Expect a message here to cost a few
           times what a normal chat message does. The total is shown live while it runs, with each step's cost listed
           under the answer.
+        </p>
+        <p>
+          You can also switch on <b>Deep research</b> for a message (the sliders button). The draft then becomes a full
+          research run, and the reviewers may search the web to check it. That takes several minutes and can cost a few
+          dollars across the providers involved.
         </p>
         <button className="btn primary" onClick={acknowledge}>
           Got it

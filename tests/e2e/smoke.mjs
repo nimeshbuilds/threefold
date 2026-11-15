@@ -187,6 +187,75 @@ try {
   await page.click('.side-btn:has-text("New chat")')
   check('reviewed chats stay out of the ordinary chat list', (await page.locator('.chat-row').count()) === 1)
 
+  // ---- image generation (Gemini mode) ----
+  await page.click('.composer .icon-btn[title="Tools and thinking"]')
+  check('Gemini mode offers image generation', (await page.locator('.tool-item:has-text("Image generation")').count()) === 1)
+  await page.click('.tool-item:has-text("Image generation")')
+  await page.keyboard.press('Escape')
+  await page.fill('.composer textarea', 'Draw a picture of a lighthouse')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.msg.assistant.streaming')
+  await page.waitForSelector('.msg.assistant.streaming', { state: 'detached', timeout: 20000 })
+  check('a generated image is shown with the reply', (await page.locator('.msg.assistant .generated-image img').count()) === 1)
+  const imageLoaded = await page.locator('.msg.assistant .generated-image img').evaluate(
+    (img) =>
+      new Promise((resolve) => {
+        if (img.complete) resolve(img.naturalWidth > 0)
+        else {
+          img.onload = () => resolve(true)
+          img.onerror = () => resolve(false)
+        }
+      }),
+  )
+  check('the generated image loads from local storage', imageLoaded === true)
+  await shot('10f-gemini-image')
+
+  // ---- deep research (Claude mode) ----
+  await page.click('.mode-switch button:has-text("Claude")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
+  await page.click('.composer .icon-btn[title="Tools and thinking"]')
+  check('Claude mode has no image generation toggle', (await page.locator('.tool-item:has-text("Image generation")').count()) === 0)
+  await page.click('.tool-item:has-text("Deep research")')
+  await page.keyboard.press('Escape')
+  check(
+    'deep research shows a pill and a note about time and cost',
+    (await page.locator('.tool-pill.research').count()) === 1 &&
+      /several minutes/.test((await page.textContent('.composer-note.research')) ?? ''),
+  )
+  await page.fill('.composer textarea', 'Research the state of solid-state batteries')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.msg.assistant.streaming')
+  await page.waitForSelector('.msg.assistant.streaming', { state: 'detached', timeout: 20000 })
+  check('the message is tagged as deep research', (await page.locator('.msg.user .research-tag').count()) === 1)
+  check(
+    'the reply is a research report with a research step',
+    /research report/.test((await page.textContent('.msg.assistant .markdown')) ?? '') &&
+      (await page.locator('.msg.assistant .event:has-text("Deep research")').count()) === 1,
+  )
+  check('deep research switches itself off after one message', (await page.locator('.tool-pill.research').count()) === 0)
+  await shot('10g-research')
+
+  // ---- deep research inside Threefold review ----
+  await page.click('.side-btn:has-text("Threefold review")')
+  await page.waitForSelector('.panel-bar')
+  await page.click('.composer .icon-btn[title="Tools and thinking"]')
+  await page.click('.tool-item:has-text("Deep research")')
+  await page.keyboard.press('Escape')
+  check(
+    'Threefold explains what deep research does there',
+    /reviewers can search the web/.test((await page.textContent('.composer-note.research')) ?? ''),
+  )
+  await page.fill('.composer textarea', 'Research the market for heat pumps')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.msg.assistant.streaming .step')
+  await page.waitForSelector('.msg.assistant.streaming', { state: 'detached', timeout: 30000 })
+  const researchSteps = await page.locator('.msg.assistant .step-head strong').allTextContents()
+  check('a researched answer is still drafted, reviewed and rewritten', researchSteps.join(',') === 'Draft,Review,Final answer', researchSteps.join(','))
+  await page.locator('.msg.assistant .step-head').nth(1).click()
+  check('reviewers critique the research report', /rests on a single source/.test((await page.textContent('.msg.assistant .step-body')) ?? ''))
+  await shot('10h-threefold-research')
+  await page.click('.side-btn:has-text("New chat")')
+
   // ---- projects ----
   await page.click('.side-btn:has-text("Projects")')
   await page.fill('.page-body .input', 'Launch plan')
@@ -237,9 +306,9 @@ try {
 
   // ---- persistence ----
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
-  check('conversations are saved to disk', saved.length === 4, `${saved.length} saved`)
+  check('conversations are saved to disk', saved.length === 7, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
-  check('every request is written to the spend ledger', ledger.length === 8, `${ledger.length} entries`)
+  check('every request is written to the spend ledger', ledger.length === 13, `${ledger.length} entries`)
   const providersBilled = new Set(ledger.map((line) => JSON.parse(line).provider))
   check('the reviewed turn is billed under each provider', providersBilled.size === 3, [...providersBilled].join(','))
   check('no API key file was written in demo mode', !fs.existsSync(path.join(dataDir, 'keys.json')))

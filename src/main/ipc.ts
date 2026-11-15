@@ -115,7 +115,7 @@ export function registerIpc(deps: IpcDeps): void {
   })
 
   handle('models:list', (provider: Provider): ModelOption[] => {
-    const all = MODELS.filter((m) => m.provider === provider)
+    const all = MODELS.filter((m) => m.provider === provider && !m.internal)
     const available = readAvailable()[provider] ?? []
     // Show only models this key can use, when we know; otherwise show the whole table.
     const usable = all.filter((m) => available.some((id) => id === m.id || id.startsWith(m.id + '-')))

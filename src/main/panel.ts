@@ -11,13 +11,18 @@
 import { randomUUID } from 'node:crypto'
 import type { Attachment, ChatMessage, Citation, Conversation, PanelStep, Provider, ToolEvent, Usage } from '@shared/types'
 import { emptyUsage, modelLabel } from '@shared/pricing'
-import type { TurnContext, TurnResult } from './providers/common'
+import { isResearch, type TurnContext, type TurnResult } from './providers/common'
 
 export const REVIEWER_SYSTEM =
   'You are an expert reviewer. Another AI assistant wrote a draft answer to a user\'s request. ' +
   'Find what is wrong or missing: factual errors, flawed reasoning, bugs, parts of the request left unanswered, ' +
   'and wording that is unclear or misleading. Be specific and brief: list the most important problems, each with its fix. ' +
   'Do not rewrite the whole answer. If the draft is correct and complete, say so in one sentence.'
+
+/** Added to the reviewer's instructions when the draft is a deep research report. */
+export const REVIEWER_RESEARCH_NOTE =
+  ' The draft is a research report. Check its key claims against its own sources and, where you can, against the web: ' +
+  'flag anything unsupported, out of date or contradicted by better sources, and name important findings it missed.'
 
 /** First words of the message that asks the answering model for its final reply. */
 export const REVISION_OPENING = 'Before I read your answer, I had it reviewed'
@@ -99,6 +104,9 @@ export async function runPanelTurn(deps: PanelDeps): Promise<PanelResult> {
   const citations: Citation[] = []
   const generated: Attachment[] = []
   const live = new Map<string, Usage>()
+  // With deep research on, the draft is a research run, the reviewers may search the web to
+  // check it, and the final rewrite may search again to settle what the reviewers raised.
+  const research = isResearch(base.history)
 
   const reportUsage = (): void => {
     base.emit.usage(combineUsage(conversation.model, [...live.values()]))
@@ -180,12 +188,13 @@ export async function runPanelTurn(deps: PanelDeps): Promise<PanelResult> {
         publish(step)
         return step
       }
-      // A reviewer sees the request and the draft, with no tools and no memory.
+      // A reviewer sees the request and the draft, with no memory and no tools
+      // (except web search when it is checking a research report).
       const asReviewer: Conversation = {
         ...conversation,
         provider: reviewer.provider,
         model: reviewer.model,
-        tools: { webSearch: false, codeExec: false, imageGen: false },
+        tools: { webSearch: research, codeExec: false, imageGen: false },
         effort: 'default',
         containerId: undefined,
         reviewers: undefined,
@@ -198,7 +207,7 @@ export async function runPanelTurn(deps: PanelDeps): Promise<PanelResult> {
         history: [
           { id: randomUUID(), role: 'user', text: prompt, attachments: latest?.attachments, createdAt: Date.now() },
         ],
-        system: REVIEWER_SYSTEM,
+        system: research ? REVIEWER_SYSTEM + REVIEWER_RESEARCH_NOTE : REVIEWER_SYSTEM,
         project: null,
         memoryEnabled: false,
         searchesThisMonth: deps.searchesFor(reviewer.provider),
@@ -240,6 +249,7 @@ export async function runPanelTurn(deps: PanelDeps): Promise<PanelResult> {
   const final = addStep('final', conversation.provider, conversation.model)
   const finalResult = await deps.run(conversation.provider, {
     ...base,
+    conversation: research ? { ...conversation, tools: { ...conversation.tools, webSearch: true } } : conversation,
     history: [
       ...base.history,
       { id: randomUUID(), role: 'assistant', text: draft.text, createdAt: Date.now() },

@@ -90,6 +90,8 @@ interface State {
   reviewers: ModelRef[]
   /** The "every model bills you" notice has been read in this session. */
   panelNoticeRead: boolean
+  /** Deep research is switched on for the next message only. */
+  researchNext: boolean
   projects: Project[]
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
@@ -106,7 +108,8 @@ interface State {
   newChat(projectId?: string): void
   openThreefold(): void
   openConversation(id: string): Promise<void>
-  send(text: string, attachments: Attachment[], truncateFrom?: string): Promise<boolean>
+  send(text: string, attachments: Attachment[], truncateFrom?: string, research?: boolean): Promise<boolean>
+  setResearchNext(on: boolean): void
   stop(): void
   regenerate(): void
   editLast(): void
@@ -154,6 +157,7 @@ export const useApp = create<State>((set, get) => ({
   draft: emptyDraft(),
   reviewers: [],
   panelNoticeRead: false,
+  researchNext: false,
   projects: [],
   spend: null,
   models: { claude: [], chatgpt: [], gemini: [] },
@@ -192,7 +196,7 @@ export const useApp = create<State>((set, get) => ({
     if (state.mode === mode) return
     // Changing mode starts a fresh chat; the Threefold tab stays open with the new answering provider.
     const view: View = state.view.kind === 'threefold' ? { kind: 'threefold' } : { kind: 'chat' }
-    set({ mode, conversation: null, view, artifact: null, draft: emptyDraft(), composerSeed: null })
+    set({ mode, conversation: null, view, artifact: null, draft: emptyDraft(), composerSeed: null, researchNext: false })
     if (view.kind === 'threefold') {
       const answering = { provider: mode, model: state.settings?.defaultModel[mode] ?? DEFAULT_MODEL[mode] }
       set({ reviewers: get().reviewers.filter((r) => !(r.provider === answering.provider && r.model === answering.model)) })
@@ -258,8 +262,14 @@ export const useApp = create<State>((set, get) => ({
     })
   },
 
-  async send(text, attachments, truncateFrom) {
+  setResearchNext(on) {
+    set({ researchNext: on })
+  },
+
+  async send(text, attachments, truncateFrom, research) {
     const state = get()
+    // Deep research applies to one message: the one being sent now.
+    const asResearch = research ?? state.researchNext
     let conversation = state.conversation
     if (!state.keys[state.mode]) {
       state.openSettings('keys')
@@ -286,11 +296,18 @@ export const useApp = create<State>((set, get) => ({
         set({ conversation })
       }
     }
-    const result = await api.chat.send({ conversationId: conversation.id, text, attachments, truncateFrom })
+    const result = await api.chat.send({
+      conversationId: conversation.id,
+      text,
+      attachments,
+      truncateFrom,
+      research: asResearch || undefined,
+    })
     if (!result.ok) {
       get().notify(result.error ?? 'The message could not be sent.', 'error')
       return false
     }
+    set({ researchNext: false })
     return true
   },
 
@@ -304,7 +321,8 @@ export const useApp = create<State>((set, get) => ({
     if (!conversation) return
     const lastUser = [...conversation.messages].reverse().find((m) => m.role === 'user')
     if (!lastUser) return
-    void get().send(lastUser.text, lastUser.attachments ?? [], lastUser.id)
+    // Trying again repeats the message the way it was sent, research included.
+    void get().send(lastUser.text, lastUser.attachments ?? [], lastUser.id, lastUser.research === true)
   },
 
   editLast() {
@@ -313,6 +331,7 @@ export const useApp = create<State>((set, get) => ({
     if (!lastUser) return
     set({
       composerSeed: { text: lastUser.text, attachments: lastUser.attachments ?? [], truncateFrom: lastUser.id },
+      researchNext: lastUser.research === true,
     })
   },
 

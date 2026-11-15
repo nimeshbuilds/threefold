@@ -115,6 +115,7 @@ export class ChatService {
       role: 'user',
       text: request.text.trim(),
       attachments: request.attachments.length > 0 ? request.attachments : undefined,
+      research: request.research ? true : undefined,
       createdAt: Date.now(),
     }
     conversation.messages.push(userMessage)

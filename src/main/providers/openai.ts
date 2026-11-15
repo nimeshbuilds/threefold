@@ -16,8 +16,10 @@ import {
   addCitation,
   describeError,
   fileBlockText,
+  isResearch,
   memoryText,
   prepareAttachment,
+  userText,
   type TurnContext,
   type TurnResult,
 } from './common'
@@ -128,8 +130,9 @@ async function buildInput(client: OpenAI, ctx: TurnContext): Promise<BuiltInput>
     if (message.role === 'user') {
       const parts = await attachmentParts(client, ctx, message.attachments, built)
       if (message.text) {
-        parts.push({ type: 'input_text', text: message.text })
-        built.chars += message.text.length
+        const text = userText(message)
+        parts.push({ type: 'input_text', text })
+        built.chars += text.length
       }
       if (parts.length > 0) built.items.push({ role: 'user', content: parts })
     } else if (message.text.trim()) {
@@ -142,7 +145,13 @@ async function buildInput(client: OpenAI, ctx: TurnContext): Promise<BuiltInput>
 
 function buildTools(ctx: TurnContext, built: BuiltInput, containerId: string | undefined): Tool[] {
   const tools: Tool[] = []
-  if (ctx.conversation.tools.webSearch) tools.push({ type: 'web_search' })
+  if (isResearch(ctx.history)) {
+    // OpenAI's guidance for long research runs: lift the cap on how much search content comes back.
+    // (The option is newer than this SDK's types, hence the cast.)
+    tools.push({ type: 'web_search', return_token_budget: 'unlimited' } as unknown as Tool)
+  } else if (ctx.conversation.tools.webSearch) {
+    tools.push({ type: 'web_search' })
+  }
   if (ctx.conversation.tools.codeExec) {
     // Reuse the sandbox from earlier turns unless new files have to be loaded into a fresh one.
     const reuse = containerId && !built.uploadedNow
@@ -185,10 +194,35 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
   let error: string | undefined
   let useReasoning = true
   let interrupted = false
+  // OpenAI has no separate research model now: deep research is a reasoning model at its
+  // highest effort with web search, run in background mode so a long run survives a dropped connection.
+  const research = isResearch(ctx.history)
+  let researchEffort: 'xhigh' | 'high' = 'xhigh'
+  let backgroundId: string | undefined
 
   const emitText = (delta: string): void => {
     text += delta
     ctx.emit.text(delta)
+  }
+
+  if (research) {
+    log.upsert({
+      id: 'research',
+      kind: 'research',
+      title: 'Deep research',
+      detail: 'Searching, reading sources and cross-checking. This can take several minutes.',
+      status: 'running',
+    })
+  }
+
+  /** Waits for a background response to finish when its live stream was lost. */
+  const waitForBackground = async (id: string): Promise<ResponseObject> => {
+    for (;;) {
+      if (ctx.signal.aborted) throw new OpenAI.APIUserAbortError()
+      const response = await client.responses.retrieve(id, undefined, { signal: ctx.signal })
+      if (response.status !== 'queued' && response.status !== 'in_progress') return response
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+    }
   }
 
   const downloadContainerFile = async (cid: string, fileId: string, name: string): Promise<void> => {
@@ -208,7 +242,8 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
     for (let loop = 0; loop < MAX_LOOPS; loop++) {
       const tools = buildTools(ctx, built, containerId)
       const include: Includable[] = []
-      if (useReasoning) include.push('reasoning.encrypted_content')
+      // Encrypted reasoning is only needed (and only allowed) when the response is not stored.
+      if (useReasoning && !research) include.push('reasoning.encrypted_content')
       if (ctx.conversation.tools.codeExec) include.push('code_interpreter_call.outputs')
 
       meter.requestStarted(
@@ -225,7 +260,9 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
             instructions: ctx.system,
             input,
             stream: true,
-            store: false,
+            // Background mode needs the response stored on OpenAI's side; ordinary chat does not store.
+            store: research,
+            ...(research ? { background: true } : {}),
             prompt_cache_key: ctx.conversation.id.slice(0, 64),
             ...(tools.length > 0 ? { tools } : {}),
             ...(include.length > 0 ? { include } : {}),
@@ -233,7 +270,11 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
               ? {
                   reasoning: {
                     summary: 'auto' as const,
-                    ...(ctx.conversation.effort !== 'default' ? { effort: ctx.conversation.effort } : {}),
+                    ...(research
+                      ? { effort: researchEffort }
+                      : ctx.conversation.effort !== 'default'
+                        ? { effort: ctx.conversation.effort }
+                        : {}),
                   },
                 }
               : {}),
@@ -241,8 +282,12 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
           { signal: ctx.signal },
         )
 
+        try {
         for await (const event of stream) {
           switch (event.type) {
+            case 'response.created':
+              if (research) backgroundId = event.response.id
+              break
             case 'response.output_text.delta':
               emitText(event.delta)
               meter.outputChars(event.delta.length)
@@ -350,9 +395,31 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
               break
           }
         }
+        } catch (streamError) {
+          // A background run keeps going on OpenAI's side when the connection drops: pick it up below.
+          const lostConnection =
+            !(streamError instanceof OpenAI.APIError) || streamError instanceof OpenAI.APIConnectionError
+          if (!research || !backgroundId || ctx.signal.aborted || !lostConnection) throw streamError
+        }
+        if (research && !final && backgroundId) {
+          final = await waitForBackground(backgroundId)
+          if (final.status === 'failed') throw new Error(final.error?.message ?? 'The research run failed.')
+          if (final.status === 'cancelled') throw new Error('The research run was cancelled.')
+          if (final.status === 'incomplete') error = 'The report was cut off because it reached the length limit.'
+          const full = final.output_text ?? ''
+          if (!text) emitText(full)
+          else if (full.startsWith(text)) emitText(full.slice(text.length))
+        }
       } catch (err) {
         if (err instanceof OpenAI.APIUserAbortError || ctx.signal.aborted) throw err
         const nothingShown = loop === 0 && !text
+        // Not every model accepts the highest effort: step down once.
+        if (nothingShown && research && researchEffort === 'xhigh' && err instanceof OpenAI.BadRequestError) {
+          researchEffort = 'high'
+          backgroundId = undefined
+          loop -= 1
+          continue
+        }
         // An expired sandbox id is rejected: start a fresh sandbox instead.
         if (nothingShown && containerId && (err instanceof OpenAI.BadRequestError || err instanceof OpenAI.NotFoundError)) {
           containerId = undefined
@@ -446,6 +513,8 @@ export async function runOpenAITurn(ctx: TurnContext): Promise<TurnResult> {
   } catch (err) {
     log.finishRunning()
     const aborted = err instanceof OpenAI.APIUserAbortError || ctx.signal.aborted
+    // Stopping the app's side is not enough for a background run: tell OpenAI to stop it too.
+    if (aborted && backgroundId) void client.responses.cancel(backgroundId).catch(() => {})
     return {
       text,
       thinking,
