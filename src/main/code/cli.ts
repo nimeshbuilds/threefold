@@ -108,6 +108,19 @@ export function installCommand(spec: CliSpec, found: { path: string; install: In
   return { file: found.path, args: ['update'], display: `${spec.bin} update` }
 }
 
+/**
+ * The install or update command, ready to run. Homebrew and npm live wherever
+ * the user put them. When the one that installed the CLI cannot be found, the
+ * maker's own installer is used instead, so that setting up never depends on
+ * a trip to the Terminal.
+ */
+export function runnableInstall(spec: CliSpec, found: { path: string; install: Install } | null, searchPath: string): Command {
+  const command = installCommand(spec, found)
+  if (path.isAbsolute(command.file)) return command
+  const file = which(command.file, searchPath)
+  return file ? { ...command, file } : installCommand(spec, null)
+}
+
 export interface Account {
   account: CliStatus['account']
   plan?: string
@@ -214,6 +227,7 @@ export class CliManager {
   private readonly baseEnv: NodeJS.ProcessEnv
   private searchPath: string | null
   private tasks = new Map<CliProvider, { task: 'install' | 'login'; child: ChildProcess }>()
+  private cancelled = new Set<CliProvider>()
   private limited = new Map<CliProvider, number>()
   private latestCache = new Map<string, { at: number; version: string | undefined }>()
   private helpCache = new Map<string, string>()
@@ -330,7 +344,7 @@ export class CliManager {
         manager: found.install.manager,
         account: account.account,
         plan: account.plan,
-        installCommand: installCommand(spec, found).display,
+        installCommand: runnableInstall(spec, found, env.PATH ?? '').display,
       }
     } catch (error) {
       return { ...base, error: error instanceof Error ? error.message : String(error) }
@@ -407,8 +421,12 @@ export class CliManager {
   }
 
   private finish(provider: CliProvider, task: 'install' | 'login', error?: string): { ok: boolean; error?: string } {
-    this.send({ type: 'done', provider, task, ok: !error, error })
-    return error ? { ok: false, error } : { ok: true }
+    // Stopping a task on purpose is not a failure to report.
+    const stopped = this.cancelled.delete(provider)
+    if (stopped) error = undefined
+    const ok = !error && !stopped
+    this.send({ type: 'done', provider, task, ok, error })
+    return error ? { ok, error } : { ok }
   }
 
   /** Installs the CLI with its maker's installer, or updates the copy that is already there. */
@@ -416,25 +434,20 @@ export class CliManager {
     const spec = CLI[provider]
     if (this.tasks.has(provider)) return { ok: false, error: `${spec.name} is already being set up.` }
     const [found, env] = await Promise.all([this.located(provider), this.env()])
-    const command = installCommand(spec, found)
+    const command = runnableInstall(spec, found, env.PATH ?? '')
     const before = found ? parseVersion((await capture(found.path, ['--version'], env)).stdout) : undefined
-    // brew and npm live wherever the user installed them.
-    const file = path.isAbsolute(command.file) ? command.file : which(command.file, env.PATH ?? '')
-    if (!file) {
-      return this.finish(provider, 'install', `"${command.file}" was not found on this computer. Run this in Terminal instead: ${command.display}`)
-    }
     this.send({ type: 'output', provider, task: 'install', text: `$ ${command.display}\n` })
-    const code = await this.run(provider, 'install', file, command.args, env, false)
+    const code = await this.run(provider, 'install', command.file, command.args, env, false)
 
     this.helpCache.clear()
     // Judge by what is there now, not by the exit code alone.
     const after = await this.located(provider)
     const version = after ? parseVersion((await capture(after.path, ['--version'], env)).stdout) : undefined
     if (!version) {
-      return this.finish(provider, 'install', `${spec.name} is still not installed. Run this in Terminal to see why: ${command.display}`)
+      return this.finish(provider, 'install', `${spec.name} could not be installed. What the installer printed is shown in the panel.`)
     }
     if (code !== 0 && version === before) {
-      return this.finish(provider, 'install', `The update did not go through (exit code ${code ?? 'none'}). Run this in Terminal to see why: ${command.display}`)
+      return this.finish(provider, 'install', `${spec.name} could not be updated. What the update printed is shown in the panel.`)
     }
     return this.finish(provider, 'install')
   }
@@ -461,7 +474,7 @@ export class CliManager {
       : this.run(provider, 'login', file, args, env, true))
     const account = await this.account(provider, file, env)
     if (account.account === 'none') {
-      return this.finish(provider, 'login', `${spec.name} is still not signed in. If the browser did not open, run "${spec.bin} ${args.join(' ')}" in Terminal.`)
+      return this.finish(provider, 'login', `${spec.name} is not signed in yet. Try again, and approve the sign-in in your browser.`)
     }
     return this.finish(provider, 'login')
   }
@@ -472,7 +485,10 @@ export class CliManager {
   }
 
   cancel(provider: CliProvider): void {
-    this.tasks.get(provider)?.child.kill('SIGTERM')
+    const running = this.tasks.get(provider)
+    if (!running) return
+    this.cancelled.add(provider)
+    running.child.kill('SIGTERM')
   }
 
   cancelAll(): void {

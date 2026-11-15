@@ -6,6 +6,7 @@ import path from 'node:path'
 import { isCliProvider } from '@shared/types'
 import type {
   CliProvider,
+  CliSetup,
   CodeEvent,
   CodeItem,
   CodeSession,
@@ -48,6 +49,8 @@ export interface AgentResult {
   outputTokens: number
   error?: string
   estimated: boolean
+  /** The turn could not use the plan because the CLI needs installing or signing in to. */
+  setup?: CliSetup
 }
 
 const AGENTS: Record<Provider, (ctx: AgentContext) => Promise<AgentResult>> = {
@@ -146,7 +149,7 @@ export class CodeService {
     pending.resolve(decision)
   }
 
-  start(sessionId: string, prompt: string, model?: string): { ok: boolean; error?: string } {
+  start(sessionId: string, prompt: string, model?: string, again = false): { ok: boolean; error?: string } {
     const session = this.store.getCodeSession(sessionId)
     if (!session) return { ok: false, error: 'That session no longer exists.' }
     if (this.running.has(sessionId)) return { ok: false, error: 'The agent is still working.' }
@@ -161,14 +164,20 @@ export class CodeService {
     const controller = new AbortController()
     this.running.set(sessionId, controller)
     this.active.set(sessionId, session)
-    void this.run(session, prompt.trim(), apiKey, controller).finally(() => {
+    void this.run(session, prompt.trim(), apiKey, controller, again).finally(() => {
       this.running.delete(sessionId)
       this.active.delete(sessionId)
     })
     return { ok: true }
   }
 
-  private async run(session: CodeSession, prompt: string, apiKey: string | null, controller: AbortController): Promise<void> {
+  private async run(
+    session: CodeSession,
+    prompt: string,
+    apiKey: string | null,
+    controller: AbortController,
+    again = false,
+  ): Promise<void> {
     const liveKey = `code:${session.id}:${Date.now()}`
     const upsert = (item: CodeItem): void => {
       const index = session.items.findIndex((existing) => existing.id === item.id)
@@ -178,7 +187,16 @@ export class CodeService {
     }
 
     if (session.items.length === 0) session.title = prompt.slice(0, 60)
-    upsert({ id: randomUUID(), type: 'user', text: prompt })
+    // A prompt sent again after the turn never got going is already on screen.
+    const last = [...session.items].reverse().find((item) => item.type === 'user')
+    const shown = again && last?.type === 'user' && last.text === prompt
+    if (shown) {
+      // The notices that explained why it stopped have done their job.
+      const from = session.items.lastIndexOf(last)
+      session.items = session.items.filter((item, index) => index <= from || item.type !== 'notice' || !item.setup)
+    } else {
+      upsert({ id: randomUUID(), type: 'user', text: prompt })
+    }
     session.updatedAt = Date.now()
     this.store.saveCodeSession(session)
 
@@ -239,6 +257,7 @@ export class CodeService {
         type: 'notice',
         text: result.error,
         tone: result.error === 'Stopped.' ? 'info' : 'error',
+        ...(result.setup ? { setup: result.setup } : {}),
       })
     }
     session.costUsd += result.costUsd
@@ -271,11 +290,19 @@ export class CodeService {
     const { session } = context
     const spec = CLI[provider]
     const plan = PLAN_NAME[provider]
-    const nothing = (error: string): AgentResult => ({ costUsd: 0, inputTokens: 0, outputTokens: 0, estimated: false, error })
-    const note = (text: string): void => context.emit.item({ id: randomUUID(), type: 'notice', text, tone: 'info' })
+    const nothing = (error: string, setup?: CliSetup): AgentResult => ({
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      estimated: false,
+      error,
+      setup,
+    })
+    const note = (text: string, setup?: CliSetup): void =>
+      context.emit.item({ id: randomUUID(), type: 'notice', text, tone: 'info', ...(setup ? { setup } : {}) })
 
     const file = await cli.find(provider)
-    if (!file) return nothing(`${spec.name} is not installed on this computer. Open “Use subscription” to install it.`)
+    if (!file) return nothing(`${spec.name} is not installed on this computer.`, { provider, need: 'install' })
 
     const usePlan = this.store.getSettings().subscription[provider]
     const pausedUntil = cli.limitedUntil(provider)
@@ -344,15 +371,15 @@ export class CodeService {
           ? `${spec.name}’s sign-in to your ${plan} has expired.`
           : `${spec.name} is not signed in to your ${plan}.`
       }
-      const signIn = 'Sign in again under “Use subscription” to use your plan.'
+      // Signing in is one click away, right under this message.
+      const signIn: CliSetup | undefined = fallback.reason === 'signed-out' ? { provider, need: 'sign-in' } : undefined
       if (!apiKey) {
         return nothing(
-          fallback.reason === 'limit'
-            ? `${why} Add an API key in Settings and Threefold will carry on with it when this happens.`
-            : `${why} ${signIn}`,
+          fallback.reason === 'limit' ? `${why} Add an API key in Settings and Threefold will carry on with it when this happens.` : why,
+          signIn,
         )
       }
-      note(fallback.reason === 'limit' ? `${why} Carrying on with your API key.` : `${why} Carrying on with your API key. ${signIn}`)
+      note(`${why} Carrying on with your API key.`, signIn)
       // The request is sent again, because the cut-off attempt may or may not have saved it.
       const again = progressed
         ? `The previous attempt at the request below was cut off before it finished. Carry on from where it stopped and do not redo work that is already done.\n\n${context.prompt}`

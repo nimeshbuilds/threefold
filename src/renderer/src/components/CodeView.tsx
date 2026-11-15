@@ -32,7 +32,11 @@ function ToolCard({ item }: { item: Extract<CodeItem, { type: 'tool' }> }) {
   )
 }
 
-function ItemView({ item }: { item: CodeItem }) {
+/**
+ * @param onSetup given for a notice that says the CLI needs installing or signing in to:
+ *   what its button does. Absent once that turn is no longer the latest.
+ */
+function ItemView({ item, onSetup }: { item: CodeItem; onSetup?: () => void }) {
   switch (item.type) {
     case 'user':
       return (
@@ -51,7 +55,16 @@ function ItemView({ item }: { item: CodeItem }) {
     case 'tool':
       return <ToolCard item={item} />
     case 'notice':
-      return <div className={`msg-error ${item.tone === 'info' ? 'muted' : ''}`}>{item.text}</div>
+      return (
+        <div className={`msg-error ${item.tone === 'info' ? 'muted' : ''} ${item.setup && onSetup ? 'with-action' : ''}`}>
+          <span>{item.text}</span>
+          {item.setup && onSetup && (
+            <button className="btn primary small" onClick={onSetup}>
+              {item.setup.need === 'install' ? `Install ${CLI_NAME[item.setup.provider]}` : 'Sign in'}
+            </button>
+          )}
+        </div>
+      )
   }
 }
 
@@ -85,6 +98,7 @@ export function CodeView() {
   const models = useApp((s) => s.models[s.mode])
   const notify = useApp((s) => s.notify)
   const openSettings = useApp((s) => s.openSettings)
+  const openSubscription = useApp((s) => s.openSubscription)
   // "Use my subscription first" is switched on for this mode.
   const onPlan = useApp((s) => (isCliProvider(s.mode) ? Boolean(s.settings?.subscription[s.mode]) : false))
 
@@ -180,6 +194,36 @@ export function CodeView() {
       setPrompt(text)
       notify(result.error ?? 'The agent could not start.', 'error')
     }
+  }
+
+  // A turn can stop because the CLI needs installing or signing in to. Its notice then carries a
+  // button that does it on the spot. When the turn never got going, the prompt is sent again after.
+  const items = session?.items ?? []
+  const lastUser = items.reduce((found, item, index) => (item.type === 'user' ? index : found), -1)
+  const lastPrompt = lastUser === -1 ? null : (items[lastUser] as Extract<CodeItem, { type: 'user' }>).text
+  const turnRan = items.slice(lastUser + 1).some((item) => item.type !== 'notice')
+  const fixAndCarryOn = (): void => {
+    if (!session || lastPrompt === null) return
+    const id = session.id
+    const model = session.model
+    openSubscription({
+      auto: true,
+      then: turnRan
+        ? undefined
+        : () => {
+            setSession((current) =>
+              current && current.id === id
+                ? { ...current, items: current.items.filter((item, index) => index <= lastUser || item.type !== 'notice' || !item.setup) }
+                : current,
+            )
+            setRunning(true)
+            void api.code.send(id, lastPrompt, model, true).then((result) => {
+              if (result.ok) return
+              setRunning(false)
+              notify(result.error ?? 'The agent could not start.', 'error')
+            })
+          },
+    })
   }
 
   const mine = sessions.filter((s) => s.provider === mode)
@@ -316,8 +360,8 @@ export function CodeView() {
                   {session.items.length === 0 && (
                     <p className="muted">Describe a task: “add a --json flag to the CLI”, “find why the tests fail”, “explain how auth works here”.</p>
                   )}
-                  {session.items.map((item) => (
-                    <ItemView key={item.id} item={item} />
+                  {session.items.map((item, index) => (
+                    <ItemView key={item.id} item={item} onSetup={!running && index > lastUser ? fixAndCarryOn : undefined} />
                   ))}
                   {running && !permission && <span className="pulse" aria-label="Working" />}
                   {permission && (

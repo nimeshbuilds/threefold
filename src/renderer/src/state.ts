@@ -104,6 +104,10 @@ interface State {
   models: Record<Provider, ModelOption[]>
   artifact: Artifact | null
   modal: 'settings' | 'onboarding' | 'handoff' | 'subscription' | null
+  /** The subscription panel was opened to finish setup straight away. */
+  subscriptionAuto: boolean
+  /** What to do once the subscription panel has finished setting up. */
+  subscriptionThen: (() => void) | null
   settingsTab: SettingsTab
   toast: { text: string; tone: 'info' | 'error' } | null
   /** Text to put back in the composer (after "Edit", or when a handoff was stopped). */
@@ -124,8 +128,11 @@ interface State {
   /** Keep the open chat (or the next new one) on its provider even when credit runs low. */
   setNoFallback(on: boolean): Promise<void>
   openHandoffModal(): void
-  /** Code tab: the panel that sets up coding on a Claude or ChatGPT subscription. */
-  openSubscription(): void
+  /**
+   * Code tab: the panel that sets up coding on a Claude or ChatGPT subscription.
+   * `auto` starts whatever setup is left at once; `then` runs when it has succeeded.
+   */
+  openSubscription(options?: { auto?: boolean; then?: () => void }): void
   stop(): void
   regenerate(): void
   editLast(): void
@@ -195,6 +202,8 @@ export const useApp = create<State>((set, get) => ({
   models: { claude: [], chatgpt: [], gemini: [] },
   artifact: null,
   modal: null,
+  subscriptionAuto: false,
+  subscriptionThen: null,
   settingsTab: 'general',
   toast: null,
   composerSeed: null,
@@ -389,8 +398,8 @@ export const useApp = create<State>((set, get) => ({
     set({ modal: 'handoff' })
   },
 
-  openSubscription() {
-    set({ modal: 'subscription' })
+  openSubscription(options) {
+    set({ modal: 'subscription', subscriptionAuto: options?.auto === true, subscriptionThen: options?.then ?? null })
   },
 
   stop() {
@@ -535,7 +544,7 @@ export const useApp = create<State>((set, get) => ({
   },
 
   closeModal() {
-    set({ modal: null })
+    set({ modal: null, subscriptionAuto: false, subscriptionThen: null })
   },
 
   notify(text, tone = 'info') {

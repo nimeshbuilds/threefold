@@ -16,6 +16,7 @@ import {
   compareVersions,
   installCommand,
   installOf,
+  runnableInstall,
   parseClaudeAuth,
   parseCodexAuth,
   parseVersion,
@@ -73,6 +74,22 @@ describe('reading what the tools say about themselves', () => {
   it('installs a missing tool with its maker’s own installer', () => {
     expect(installCommand(CLI.claude, null)).toEqual({ file: '/bin/sh', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'], display: 'curl -fsSL https://claude.ai/install.sh | bash' })
     expect(installCommand(CLI.chatgpt, null).display).toBe('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
+  })
+
+  it('never leaves an update to the Terminal: without Homebrew or npm it uses the maker’s installer', () => {
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-bin-'))
+    fs.writeFileSync(path.join(bin, 'brew'), '#!/bin/sh\n', { mode: 0o755 })
+    const cask = { path: '/opt/homebrew/bin/claude', install: installOf('/opt/homebrew/Caskroom/claude-code/2.1.0/claude') }
+    // Homebrew is there: its full path is used.
+    expect(runnableInstall(CLI.claude, cask, bin)).toMatchObject({ file: path.join(bin, 'brew'), display: 'brew upgrade --cask claude-code' })
+    // Homebrew cannot be found: fall back to Anthropic's own installer instead of giving up.
+    expect(runnableInstall(CLI.claude, cask, '/nonexistent')).toEqual(installCommand(CLI.claude, null))
+    const npm = { path: '/usr/local/bin/codex', install: installOf('/usr/local/lib/node_modules/@openai/codex/bin/codex.js') }
+    expect(runnableInstall(CLI.chatgpt, npm, '/nonexistent').display).toBe('curl -fsSL https://chatgpt.com/codex/install.sh | sh')
+    // The tool's own updater needs no lookup.
+    const native = { path: '/Users/sam/.local/bin/claude', install: installOf('/Users/sam/.local/share/claude/versions/2.1.325') }
+    expect(runnableInstall(CLI.claude, native, '/nonexistent')).toMatchObject({ file: '/Users/sam/.local/bin/claude', args: ['update'] })
+    fs.rmSync(bin, { recursive: true, force: true })
   })
 
   it('strips terminal colour codes from tool output', () => {
@@ -250,6 +267,17 @@ describe('checking, updating and signing in to a CLI', () => {
     expect(events.flatMap((e) => (e.type === 'output' ? [e.text] : [])).join('')).toContain('Login successful.')
   })
 
+  it('treats a sign-in that was cancelled as stopped, not as a failure', async () => {
+    setFake('codex', { loggedIn: false })
+    const { cli, events } = manager()
+    const pending = cli.login('chatgpt')
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    cli.cancel('chatgpt')
+    expect(await pending).toEqual({ ok: false })
+    expect(events.at(-1)).toEqual({ type: 'done', provider: 'chatgpt', task: 'login', ok: false, error: undefined })
+    expect(fake('codex').loggedIn).toBe(false)
+  })
+
   it('remembers a plan limit until it resets', () => {
     const { cli } = manager()
     const now = Date.now()
@@ -365,10 +393,10 @@ function harness(options: { keys?: Partial<Record<Provider, string>>; decide?: P
     { cli, bridge },
   )
   /** Sends a prompt and waits for the turn to finish. Returns the transcript items added by it. */
-  const turn = async (sessionId: string, prompt: string): Promise<CodeItem[]> => {
-    const before = service.get(sessionId)?.items.length ?? 0
+  const turn = async (sessionId: string, prompt: string, again = false): Promise<CodeItem[]> => {
+    const before = again ? 0 : (service.get(sessionId)?.items.length ?? 0)
     const seen = events.length
-    expect(service.start(sessionId, prompt)).toEqual({ ok: true })
+    expect(service.start(sessionId, prompt, undefined, again)).toEqual({ ok: true })
     for (;;) {
       if (events.slice(seen).some((event) => event.type === 'done')) break
       await new Promise<void>((resolve) => waiters.push(resolve))
@@ -513,9 +541,9 @@ describe('a Claude session on the subscription', () => {
     store.updateSettings({ subscription: { claude: true, chatgpt: false } })
     const items = await turn(service.create('claude', work()).id, 'Do the thing')
     expect(fake('claude').calls.map((call) => call.auth)).toEqual(['plan', 'api'])
-    expect(notices(items)[0]).toBe(
-      'Claude Code is not signed in to your Claude plan. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
-    )
+    expect(notices(items)[0]).toBe('Claude Code is not signed in to your Claude plan. Carrying on with your API key.')
+    // The notice carries what is needed to sign in on the spot.
+    expect(items.find((item) => item.type === 'notice' && item.setup)).toMatchObject({ setup: { provider: 'claude', need: 'sign-in' } })
     bridge.stop()
   })
 
@@ -524,9 +552,7 @@ describe('a Claude session on the subscription', () => {
     const withKey = harness()
     withKey.store.updateSettings({ subscription: { claude: true, chatgpt: false } })
     const first = await withKey.turn(withKey.service.create('claude', work()).id, 'Do the thing')
-    expect(withKey.notices(first)[0]).toBe(
-      'Claude Code’s sign-in to your Claude plan has expired. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
-    )
+    expect(withKey.notices(first)[0]).toBe('Claude Code’s sign-in to your Claude plan has expired. Carrying on with your API key.')
     expect(withKey.notices(first).at(-1)).toMatch(/^Ran on your API key/)
     withKey.bridge.stop()
 
@@ -534,9 +560,28 @@ describe('a Claude session on the subscription', () => {
     const noKey = harness({ keys: {} })
     noKey.store.updateSettings({ subscription: { claude: true, chatgpt: false } })
     const second = await noKey.turn(noKey.service.create('claude', work()).id, 'Do the thing')
-    expect(noKey.notices(second)).toEqual(['Claude Code’s sign-in to your Claude plan has expired. Sign in again under “Use subscription” to use your plan.'])
+    expect(noKey.notices(second)).toEqual(['Claude Code’s sign-in to your Claude plan has expired.'])
+    expect(second.at(-1)).toMatchObject({ type: 'notice', tone: 'error', setup: { provider: 'claude', need: 'sign-in' } })
     expect(noKey.ledger()).toEqual([])
     noKey.bridge.stop()
+  })
+
+  it('sends the same request again after signing in, without showing it twice', async () => {
+    setFake('claude', { loggedIn: false, expired: true } as never)
+    const { store, service, turn, notices, bridge } = harness({ keys: {} })
+    store.updateSettings({ subscription: { claude: true, chatgpt: false } })
+    const session = service.create('claude', work())
+    await turn(session.id, 'Change the file')
+    // The user signs in from the button under the notice; the window then sends the request again.
+    setFake('claude', { loggedIn: true })
+    const all = await turn(session.id, 'Change the file', true)
+    expect(all.filter((item) => item.type === 'user')).toHaveLength(1)
+    // The notice about signing in has done its job and is gone.
+    expect(all.some((item) => item.type === 'notice' && item.setup)).toBe(false)
+    expect(all.map((item) => item.type)).toEqual(['user', 'text', 'tool', 'text', 'notice'])
+    expect(notices(all).at(-1)).toMatch(/^Ran on your Claude plan/)
+    expect(fake('claude').calls.map((call) => call.prompt)).toEqual(['Change the file', 'Change the file'])
+    bridge.stop()
   })
 
   it('runs an existing CLI session on the API key once "use my subscription" is switched off', async () => {
@@ -587,11 +632,12 @@ describe('a Claude session on the subscription', () => {
   })
 
   it('explains what to do when the CLI is not installed', async () => {
-    const { store, service, turn, notices, bridge } = harness()
+    const { store, service, turn, bridge } = harness()
     store.updateSettings({ subscription: { claude: true, chatgpt: false } })
     const session = service.create('claude', work())
     fs.rmSync(path.join(dir, 'claude'))
-    expect(notices(await turn(session.id, 'Hello')).at(-1)).toMatch(/Claude Code is not installed on this computer\. Open “Use subscription” to install it\./)
+    const items = await turn(session.id, 'Hello')
+    expect(items.at(-1)).toMatchObject({ type: 'notice', text: 'Claude Code is not installed on this computer.', setup: { provider: 'claude', need: 'install' } })
     bridge.stop()
   })
 })
@@ -654,9 +700,8 @@ describe('a ChatGPT session on the subscription', () => {
     const { store, service, turn, notices, bridge } = harness()
     store.updateSettings({ subscription: { claude: false, chatgpt: true } })
     const items = await turn(service.create('chatgpt', work()).id, 'Go')
-    expect(notices(items)).toContain(
-      'Codex is not signed in to your ChatGPT plan. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
-    )
+    expect(notices(items)).toContain('Codex is not signed in to your ChatGPT plan. Carrying on with your API key.')
+    expect(items.find((item) => item.type === 'notice' && item.setup)).toMatchObject({ setup: { provider: 'chatgpt', need: 'sign-in' } })
     expect(fake('codex').calls.map((call) => call.auth)).toEqual(['plan', 'api'])
     bridge.stop()
   })

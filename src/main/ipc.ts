@@ -373,7 +373,9 @@ export function registerIpc(deps: IpcDeps): void {
     code.stop(id)
     store.deleteCodeSession(id)
   })
-  handle('code:send', (sessionId: string, prompt: string, model?: string) => code.start(sessionId, String(prompt), model))
+  handle('code:send', (sessionId: string, prompt: string, model?: string, again?: boolean) =>
+    code.start(sessionId, String(prompt), model, again === true),
+  )
   handle('code:stop', (sessionId: string) => code.stop(sessionId))
   handle('code:respond', (requestId: string, decision: PermissionDecision) => code.respond(requestId, decision))
 

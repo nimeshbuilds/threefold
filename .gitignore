@@ -9,3 +9,4 @@ dist/
 coverage/
 .demo-data/
 tests/e2e/screenshots/
+tests/live/screenshots/

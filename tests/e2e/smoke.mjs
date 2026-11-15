@@ -353,21 +353,28 @@ try {
   check('the subscription cannot be switched on before setup is done', await page.locator('.sub-modal .switch').isDisabled())
   await shot('23-subscription-setup')
 
+  // One button does everything that is left: here, sign in and switch on.
+  const go = (await page.textContent('.sub-go')) ?? ''
+  check('one button names everything that is left to do', /Sign in and switch on/.test(go), go)
+  check('nothing in the panel sends the user to a terminal', !/terminal/i.test((await page.textContent('.sub-modal')) ?? ''))
+  await page.click('.sub-go')
+  await page.waitForSelector('.sub-done', { timeout: 15000 })
+  const signedIn = (await step(1).textContent()) ?? ''
+  check(
+    'that one click runs the CLI’s own sign-in and passes on its link',
+    /Signed in · Max plan/.test(signedIn) && /claude\.ai\/oauth\/authorize/.test(signedIn) && /Login successful/.test(signedIn) && /never sees your password or any token/.test(signedIn),
+    signedIn.slice(0, 160),
+  )
+  check(
+    'and switches the subscription on by itself',
+    (await page.getAttribute('.sub-modal .switch', 'aria-checked')) === 'true' && /On\. New coding sessions use your Claude plan first/.test((await page.textContent('.sub-done')) ?? ''),
+  )
+
+  // Updating is offered, not required: this version works.
   await page.click('.sub-modal .btn:has-text("Update Claude Code")')
   await stepStatus(0, /Up to date/)
   const updated = (await step(0).textContent()) ?? ''
   check('the CLI is updated from inside the app', /Version 2\.1\.325, the newest\./.test(updated) && /Update complete\./.test(updated), updated.slice(0, 160))
-
-  await page.click('.sub-modal .btn:has-text("Sign in with Claude")')
-  await stepStatus(1, /Signed in · Max plan/)
-  const signedIn = (await step(1).textContent()) ?? ''
-  check(
-    'signing in runs the CLI’s own sign-in and passes on its link',
-    /claude\.ai\/oauth\/authorize/.test(signedIn) && /Login successful/.test(signedIn) && /never sees your password or any token/.test(signedIn),
-    signedIn.slice(0, 160),
-  )
-  await page.click('.sub-modal .switch')
-  check('the subscription can be switched on once the CLI is ready', (await page.getAttribute('.sub-modal .switch', 'aria-checked')) === 'true')
   check('the panel says Claude Code still asks before acting', /still asks you before it edits a file or runs a command/.test((await step(2).textContent()) ?? ''))
   await page.mouse.move(5, 5)
   await page.waitForTimeout(300)
@@ -395,11 +402,47 @@ try {
   check('work on the plan adds nothing to the session’s API cost', /This session \$0\.00 on API/.test((await page.textContent('.code-page .cost-chip')) ?? ''))
   await shot('26-subscription-plan-run')
 
+  // The sign-in runs out behind the app's back. The session says so, offers to fix it on the spot,
+  // and meanwhile carries on with the API key.
+  const expire = JSON.parse(fs.readFileSync(fakeState, 'utf8'))
+  Object.assign(expire.claude, { loggedIn: false, expired: true })
+  fs.writeFileSync(fakeState, JSON.stringify(expire))
+  await page.fill('.code-main .composer textarea', 'One more change')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.permission', { timeout: 20000 })
+  await page.click('.permission .btn.primary')
+  await codeNotice('Ran on your API key')
+  const expired = (await page.textContent('.code-main .msg-error.with-action')) ?? ''
+  check(
+    'an expired sign-in is named, and the session carries on with the API key',
+    /Claude Code’s sign-in to your Claude plan has expired\. Carrying on with your API key\./.test(expired),
+    expired,
+  )
+  check('the session offers to sign in right there', /Sign in/.test((await page.textContent('.code-main .msg-error.with-action .btn')) ?? ''))
+  await shot('26b-subscription-sign-in-again')
+  await page.click('.code-main .msg-error.with-action .btn')
+  // The panel opens, signs in and closes again without another click.
+  await page.waitForSelector('.sub-modal')
+  await page.waitForSelector('.sub-modal', { state: 'detached', timeout: 15000 })
+  check('signing in from the session needs one click and returns to it', JSON.parse(fs.readFileSync(fakeState, 'utf8')).claude.loggedIn === true)
+  await page.fill('.code-main .composer textarea', 'Back on the plan')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.permission', { timeout: 20000 })
+  await page.click('.permission .btn.primary')
+  await page.waitForFunction(() => document.querySelectorAll('.code-main .msg-error.muted').length >= 4 && /Ran on your Claude plan/.test([...document.querySelectorAll('.code-main .msg-error.muted')].at(-1)?.textContent ?? ''), null, { timeout: 20000 })
+  check('after signing in, the next turn is on the plan again', true)
+
   await page.fill('.code-main .composer textarea', 'Now hit the LIMIT')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.permission', { timeout: 20000 })
   await page.click('.permission .btn.primary')
-  const apiLine = (await (await codeNotice('Ran on your API key')).textContent()) ?? ''
+  // This is the second turn that ends on the API key, so wait for the second such line.
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.code-main .msg-error.muted')].filter((line) => /Ran on your API key/.test(line.textContent ?? '')).length === 2,
+    null,
+    { timeout: 20000 },
+  )
+  const apiLine = (await page.locator('.code-main .msg-error.muted:has-text("Ran on your API key")').last().textContent()) ?? ''
   const thread = (await page.textContent('.code-main .thread')) ?? ''
   check(
     'when the plan’s limit is reached it says so and carries on with the API key',
@@ -411,7 +454,9 @@ try {
   const claudeCalls = JSON.parse(fs.readFileSync(fakeState, 'utf8')).claude.calls
   check(
     'the plan run got no API key, and the fallback continued the same session with one',
-    claudeCalls.map((call) => `${call.auth}:${call.resume ?? 'new'}`).join(' ') === 'plan:new plan:claude-session-1 api:claude-session-1',
+    claudeCalls.map((call) => `${call.auth}:${call.resume ?? 'new'}`).join(' ') ===
+      // first turn; expired sign-in then the key; signed in again; limit reached then the key
+      'plan:new plan:claude-session-1 api:claude-session-1 plan:claude-session-1 plan:claude-session-1 api:claude-session-1',
     claudeCalls.map((call) => `${call.auth}:${call.resume ?? 'new'}`).join(' '),
   )
 
@@ -425,7 +470,10 @@ try {
   await stepStatus(1, /Signed in/)
   check('Codex is found already signed in with ChatGPT', /Codex is signed in with your ChatGPT plan/.test((await step(1).textContent()) ?? ''))
   check('the panel says how Codex differs: a sandbox, and no asking', /Codex does not ask before each step/.test((await step(2).textContent()) ?? ''))
-  await page.click('.sub-modal .switch')
+  // Codex is installed and signed in, so all that is left is to switch it on.
+  check('with nothing else to do, the one button just switches it on', /^\s*Switch on\s*$/.test((await page.textContent('.sub-go')) ?? ''))
+  await page.click('.sub-go')
+  await page.waitForSelector('.sub-done')
   await page.click('.sub-modal .btn:has-text("Done")')
   await page.click('.code-sessions .btn.primary')
   await page.waitForSelector('.engine-tag')
@@ -605,11 +653,11 @@ try {
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
   check('conversations are saved to disk', saved.length === 11, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
-  check('every request is written to the spend ledger', ledger.length === 20, `${ledger.length} entries`)
+  check('every request is written to the spend ledger', ledger.length === 21, `${ledger.length} entries`)
   const coding = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'code')
   check(
     'only the part of a coding session that ran on the API key is on the ledger',
-    coding.length === 1 && coding[0].provider === 'claude' && coding[0].costUsd > 0,
+    coding.length === 2 && coding.every((entry) => entry.provider === 'claude' && entry.costUsd > 0),
     coding.map((entry) => `${entry.provider}:${entry.costUsd}`).join(','),
   )
   const summaries = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'handoff')

@@ -108,11 +108,15 @@ A Claude or ChatGPT subscription already covers coding in the maker's own comman
 
 ![A coding session that ran on the plan, reached its limit, and carried on with the API key](docs/screenshots/subscription.png)
 
-**Setting it up, from inside the app.** The panel behind **Use subscription** does three things:
+**Setting it up is one click, inside the app.** The panel behind **Use subscription** has one button, and it does whatever is still missing, in order. Nothing needs a terminal.
 
-1. **Checks the tool.** It looks for Claude Code or Codex on your Mac, reads its version and looks up the newest one. If the tool is missing or out of date, one button installs or updates it with the maker's own command, which is shown before it runs: the maker's install script for a new install, and `brew upgrade`, `npm install -g …@latest` or the tool's own `update` command for an existing one, depending on how it was installed.
-2. **Signs you in.** The button starts the tool's own sign-in, which opens Anthropic's or OpenAI's page in your browser. If the browser shows a code instead of returning to the app, there is a box to paste it into.
-3. **Switches it on.** The switch only becomes available once the tool is installed, recent enough and signed in with a subscription.
+1. **Installs the tool** if it is not on your Mac, with its maker's own installer. A copy that is too old is updated the same way it was installed (`brew upgrade`, `npm install -g …@latest` or the tool's own `update` command); if Homebrew or npm cannot be found, the maker's installer is used instead. The exact command is shown.
+2. **Signs you in.** It starts the tool's own sign-in, which opens Anthropic's or OpenAI's page in your browser. Approve it there and the app carries on by itself. If the page shows a code instead, there is a box to paste it into, and a button that opens the page again.
+3. **Switches it on.**
+
+A newer version of a tool that already works is offered as an optional update.
+
+**If the sign-in runs out later,** the session says so and shows a **Sign in** button right there. With an API key saved, the turn carries on with the key in the meantime. Without one, signing in sends the same request again by itself.
 
 **What Threefold does and does not do here**
 
@@ -355,8 +359,8 @@ pnpm test:e2e
 
 **Tested automatically, with no API key:**
 
-- 181 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, automatic fallback (when it switches, where to, what is billed, what happens when the summary fails or is stopped), handoff summaries and the published skill files, coding on a subscription (finding, updating and signing in to the CLIs, plan-first runs, permission prompts, falling back to the API key in the same session, what is billed), storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
-- 123 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, coding on a subscription (updating the CLI, signing in, a run on the plan, the limit and the switch to the API key), automatic fallback, manual handoff, pasting a handoff, projects, memory, spend, dark theme and what is written to disk.
+- 187 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, automatic fallback (when it switches, where to, what is billed, what happens when the summary fails or is stopped), handoff summaries and the published skill files, coding on a subscription (finding, updating and signing in to the CLIs, plan-first runs, permission prompts, falling back to the API key in the same session, what is billed), storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
+- 130 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, coding on a subscription (updating the CLI, signing in, a run on the plan, the limit and the switch to the API key), automatic fallback, manual handoff, pasting a handoff, projects, memory, spend, dark theme and what is written to disk.
 
 **Not run against the real APIs by the automated tests.** The provider code is written against the official SDK type definitions and documentation and compiles against them. A live suite is ready for checking it with your own keys:
 
@@ -366,6 +370,14 @@ ANTHROPIC_API_KEY=... OPENAI_API_KEY=... GEMINI_API_KEY=... pnpm test:live
 
 Set any subset of the three keys. For each provider it checks the key, streaming and exact cost, the default model, multi-turn context, image and file input, the memory tool, web search, code execution, image generation, stopping mid-reply and chat naming, then runs one Threefold review across the providers you supplied. It uses the cheapest models where it can and prints what it spent, which should be well under a dollar.
 
+To check "Use subscription" against the real Claude Code and Codex, in the real app on a throwaway profile:
+
+```bash
+pnpm test:subscription
+```
+
+It needs you at the keyboard: when a tool is not signed in, the app opens its maker's sign-in page and you approve it in your browser. It uses no API key and sends one small prompt to each plan.
+
 Deep research is left out of that run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
 
 Also not verified: the Gemini importer against a real Takeout file (it is tested against Google's documented record shape and folder layout), the first-launch macOS warning on a freshly downloaded copy of the release, and the three coding agents against real projects.
@@ -374,7 +386,8 @@ Coding on a subscription, checked against the real tools on a real Mac:
 
 - **Codex, for real.** One real session through Codex 0.156.1 on a ChatGPT plan: Threefold ran it, Codex made the edit inside its sandbox, the transcript and the "ran on your plan" line were right, and nothing was billed to an API key. Codex's real output matched what Threefold's parser expects line for line.
 - **Claude Code, partly.** With the real Claude Code 2.1.281, Threefold finds it and reads its version, install method and sign-in state; Claude Code accepts the options Threefold passes and connects to Threefold's permission server; and an expired sign-in is recognised and reported with the right advice.
-- **Not yet checked for real:** a Claude Code run on a real plan (the sign-in on the test Mac had expired, and signing in is the user's to do), a real permission prompt from Claude Code, a real usage-limit message from either tool, and installing, updating or signing in for real. Those paths are covered by stand-ins that play the two tools, written from their documented output and corrected against what the real tools printed.
+- **In the real app.** On a throwaway profile, the one-click setup found both real tools and how they were installed, switched Codex on and ran a real session on the ChatGPT plan. For Claude Code it started the real sign-in from the app and reached Anthropic's page; nobody approved it in the browser during that run.
+- **Not yet checked for real:** a Claude Code sign-in approved through to the end, a Claude Code run on a real plan, a real permission prompt from Claude Code, a real usage-limit message from either tool, and installing or updating for real. Those paths are covered by stand-ins that play the two tools, written from their documented output and corrected against what the real tools printed.
 
 Not verified for fallback and handoff: a summary written by a real model (the tests use stand-in providers, so the quality of real summaries is untested), and uploading the `threefolds` skill inside the official Claude, ChatGPT and Gemini apps. The install steps follow each company's help pages as they read in November 2026; the skill has not been run inside those apps.
 

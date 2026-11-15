@@ -296,6 +296,12 @@ export function isCliProvider(value: unknown): value is CliProvider {
   return value === 'claude' || value === 'chatgpt'
 }
 
+/** What a coding CLI needs before a session can run on the user's plan. */
+export interface CliSetup {
+  provider: CliProvider
+  need: 'install' | 'sign-in'
+}
+
 /** What Threefold knows about a coding CLI on this computer. */
 export interface CliStatus {
   provider: CliProvider
@@ -342,7 +348,17 @@ export type CodeItem =
       output?: string
       status: 'running' | 'done' | 'error' | 'denied'
     }
-  | { id: string; type: 'notice'; text: string; tone: 'info' | 'error' }
+  | {
+      id: string
+      type: 'notice'
+      text: string
+      tone: 'info' | 'error'
+      /**
+       * The coding CLI for this mode has to be installed or signed in to before the
+       * plan can be used. The window offers to do it, right where this is shown.
+       */
+      setup?: CliSetup
+    }
 
 export interface CodeSessionMeta {
   id: string
@@ -508,7 +524,11 @@ export interface ThreefoldApi {
     get(id: string): Promise<CodeSession | null>
     create(provider: Provider): Promise<CodeSession | null>
     remove(id: string): Promise<void>
-    send(sessionId: string, prompt: string, model?: string): Promise<{ ok: boolean; error?: string }>
+    /**
+     * Sends a prompt. `again` repeats the last prompt after the turn stopped before it began
+     * (the CLI needed signing in to, say), without showing the prompt a second time.
+     */
+    send(sessionId: string, prompt: string, model?: string, again?: boolean): Promise<{ ok: boolean; error?: string }>
     stop(sessionId: string): Promise<void>
     respond(requestId: string, decision: PermissionDecision): Promise<void>
     onEvent(listener: (event: CodeEvent) => void): () => void

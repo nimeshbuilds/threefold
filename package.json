@@ -1,6 +1,6 @@
 {
   "name": "threefold",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Threefold — a local desktop app for Claude, ChatGPT and Gemini that runs on your own API keys and shows what every message costs.",
   "main": "./out/main/index.js",
   "author": "nimeshbuilds",
@@ -23,7 +23,8 @@
     "test:e2e": "electron-vite build && node tests/e2e/smoke.mjs",
     "demo": "electron-vite build && THREEFOLD_DEMO=1 THREEFOLD_DATA_DIR=.demo-data electron .",
     "test:live": "vitest run --config vitest.live.config.ts",
-    "skill": "node scripts/make-skill.mjs"
+    "skill": "node scripts/make-skill.mjs",
+    "test:subscription": "electron-vite build && node tests/live/subscription-real.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.325",
