@@ -35,3 +35,27 @@
     })
   })
 })()
+
+// Adds a Copy button to each command in the quick start. Without it the
+// commands are still plain text that can be selected.
+;(function () {
+  if (!navigator.clipboard) return
+  Array.prototype.forEach.call(document.querySelectorAll('pre.cmd'), function (block) {
+    var code = block.querySelector('code')
+    if (!code) return
+    var button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'copy'
+    button.textContent = 'Copy'
+    button.setAttribute('aria-label', 'Copy command: ' + code.textContent)
+    button.addEventListener('click', function () {
+      navigator.clipboard.writeText(code.textContent).then(function () {
+        button.textContent = 'Copied'
+        setTimeout(function () {
+          button.textContent = 'Copy'
+        }, 1600)
+      })
+    })
+    block.appendChild(button)
+  })
+})()

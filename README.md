@@ -90,17 +90,71 @@ Checked against each provider's documentation and SDK in November 2026.
 
 ![The spend breakdown](docs/screenshots/spend.png)
 
+## Quick start
+
+There are two ways to get Threefold onto your Mac. Download the ready-made app, or build it from this source.
+
+### Option A: download the app
+
+For Apple Silicon Macs (M1 or later) on macOS 13 or later. On an Intel Mac, use Option B.
+
+> **The app is not signed by Apple.** Threefold is not signed with an Apple Developer ID and has not been notarized, so Apple has not checked this build. macOS blocks apps like that by default, and you have to allow it yourself, once, in System Settings (steps 3 to 5). Apple advises against doing this for software you do not trust. If you would rather not, use Option B: an app built on your own Mac opens without the warning.
+
+1. Download [Threefold-mac-arm64.zip](https://github.com/nimeshbuilds/threefold/releases/latest/download/Threefold-mac-arm64.zip) (about 290 MB). The checksum is on the [releases page](https://github.com/nimeshbuilds/threefold/releases).
+2. Double-click the ZIP in your Downloads folder, then drag **Threefold** into **Applications**.
+3. Double-click Threefold. macOS stops it and says Apple could not verify the app. Click **Done**. Do not choose Move to Trash.
+4. Open **System Settings → Privacy & Security** and scroll down to **Security**. Next to the note that Threefold was blocked, click **Open Anyway**. The button is only there for about an hour after step 3.
+5. Confirm with **Open Anyway** and enter your Mac login password. Threefold opens, and from now on a normal double-click is enough.
+
+These are Apple's own steps for [opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
+
+If you prefer Terminal, or macOS says the app "is damaged", remove the "downloaded from the internet" flag after step 2 and then open Threefold normally:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Threefold.app
+```
+
+After you replace the app with a newer version, macOS may ask once for your login password so Threefold can read its saved API keys from the Keychain. Choose Always Allow.
+
+### Option B: build it from source
+
+You need macOS 13 or later, Git, Node.js 22 or later and pnpm 10.
+
+1. Install the tools you are missing. Git comes with Apple's command line tools, and Node.js is at [nodejs.org](https://nodejs.org/).
+
+   ```bash
+   xcode-select --install
+   ```
+
+   ```bash
+   npm install -g pnpm@10
+   ```
+
+2. Get the source and go into its folder.
+
+   ```bash
+   git clone https://github.com/nimeshbuilds/threefold
+   ```
+
+   ```bash
+   cd threefold
+   ```
+
+3. Install what it depends on. This downloads Electron, so give it a few minutes.
+
+   ```bash
+   pnpm install
+   ```
+
+4. Run it. This starts Threefold straight from the source, with no macOS warning.
+
+   ```bash
+   pnpm dev
+   ```
+
+5. Optional: build an app you can keep in Applications. See [Build a Mac app](#build-a-mac-app).
+
 ## Setup
-
-Requirements: macOS 13 or later, Node.js 22 or later, pnpm 10.
-
-```bash
-pnpm install
-```
-
-```bash
-pnpm dev
-```
 
 The first launch opens a short wizard. For each mode you want:
 
@@ -113,7 +167,7 @@ The first launch opens a short wizard. For each mode you want:
 
 Without plan credits everything still works; usage is billed to the payment method on your API account. Gemini also has a free tier with low limits.
 
-To try the interface without any key:
+To try the interface without any key (from source):
 
 ```bash
 pnpm demo
@@ -121,12 +175,40 @@ pnpm demo
 
 Demo mode makes no network calls and costs nothing. Replies are canned.
 
-### Importing your history
+## Importing your history
 
-- **Claude and ChatGPT:** in the official app choose Settings → Export data. You get an email with a ZIP.
-- **Gemini:** Google has no conversation export. In [Google Takeout](https://takeout.google.com/) deselect everything, tick My Activity, keep only Gemini Apps, and set the format to JSON. That gives an activity log of prompts and replies; Threefold groups prompts made within half an hour of each other into one chat.
+Ask each company for an export of your data, then hand the ZIP to Threefold. Do not unzip it.
 
-In Threefold open Settings → Import history and pick the ZIP; no need to unzip it. Imported chats can be continued through the API. An export is a snapshot: images and uploaded files are not in it, and chats continued in Threefold do not sync back.
+**Claude**
+
+1. On [claude.ai](https://claude.ai/settings) or in the Claude desktop app (not the phone app), open **Settings → Privacy** and click **Export data**.
+2. Claude emails a download link to your account's address. Open it while signed in; it expires after 24 hours.
+
+On a Team or Enterprise plan, export works only if an owner has allowed members to export their data. [Anthropic's guide](https://support.claude.com/en/articles/9450526)
+
+**ChatGPT**
+
+1. In [ChatGPT](https://chatgpt.com/), open your profile menu, then **Settings → Data controls**. Next to **Export data** click **Export**, then **Confirm export**.
+2. ChatGPT emails or texts you when the export is ready. That is often quick but can take days. Download it while signed in to the same account; the link expires after 24 hours.
+
+Business and Enterprise workspaces do not offer this export. [OpenAI's guide](https://help.openai.com/en/articles/7260999)
+
+**Gemini**
+
+Google has no conversation export. What it does export is your Gemini activity log, through Google Takeout.
+
+1. Open [Google Takeout](https://takeout.google.com/) and click **Deselect all**. Scroll to **My Activity** and tick it. Not the separate *Gemini* entry: that one holds your Gems, not your chats.
+2. Under My Activity click **All activity data included**, choose **Deselect all**, tick only **Gemini Apps** and confirm.
+3. Still under My Activity click **Multiple formats** and set **Activity records** to **JSON**. The default is HTML, which Threefold cannot read.
+4. Click **Next step**, then **Create export**. Google emails you a download link.
+
+Because this is an activity log and not a list of conversations, Threefold groups prompts made within half an hour of each other into one chat. Only activity Gemini was saving (Gemini Apps Activity switched on) is included, and work or school accounts may not allow the export.
+
+**Then, in Threefold**
+
+Open **Settings → Import history**. Under that provider's heading click **Choose export file…** and select the ZIP. The first-launch wizard offers the same step. The chats appear in that mode's sidebar and can be continued through the API.
+
+An export is a snapshot: pictures and uploaded files are not in it, and chats continued in Threefold do not sync back. Importing the same export again adds only what is new. Reading old chats is free; continuing one sends its history to the API and is billed like any other message.
 
 ## Build a Mac app
 
@@ -134,7 +216,15 @@ In Threefold open Settings → Import history and pick the ZIP; no need to unzip
 pnpm dist
 ```
 
-This produces `dist/mac-arm64/Threefold.app`, unsigned. To open an unsigned app the first time, right-click it and choose Open.
+This produces `dist/mac-arm64/Threefold.app`. Drag it into Applications. A build made on your own Mac opens with a normal double-click, because macOS only checks apps that were downloaded.
+
+To make the ZIP that is attached to a release:
+
+```bash
+pnpm release:zip
+```
+
+That builds the app, signs it ad hoc (a local signature with no Apple identity, which keeps macOS from reporting a downloaded copy as damaged), checks the signature and writes `dist/Threefold-mac-arm64.zip` with its SHA-256. The result is still not notarized, so anyone who downloads it has to follow the steps in [Option A](#option-a-download-the-app).
 
 ## How cost is calculated
 
@@ -194,7 +284,7 @@ pnpm test:e2e
 
 **Tested automatically, with no API key:**
 
-- 101 unit tests: price maths including announced price changes and image pricing, the three export parsers, storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
+- 112 unit tests: price maths including announced price changes and image pricing, the three export parsers, importing real ZIP archives laid out like each provider's export, storage and the spend ledger, file-tool path confinement, the cost meter, the research helpers, and the Threefold review engine (ordering, prompts, failed or missing reviewers, stop, cost adding up, deep research).
 - 67 end-to-end checks that drive the real app in demo mode, on both the development build and the packaged `Threefold.app`: the wizard, all three modes, live cost, the preview panel, image generation, deep research, the Threefold review tab and its billing notice, projects, memory, spend, dark theme and what is written to disk.
 
 **Not run against the real APIs by the automated tests.** The provider code is written against the official SDK type definitions and documentation and compiles against them. A live suite is ready for checking it with your own keys:
@@ -207,4 +297,4 @@ Set any subset of the three keys. For each provider it checks the key, streaming
 
 Deep research is left out of that run because it takes minutes and costs real money. Add `THREEFOLD_LIVE_RESEARCH=1` to include one research run per provider (expect a few dollars with all three keys).
 
-Also not verified: the Gemini importer against a real Takeout file (it is tested against the documented record shape), and the three coding agents against real projects.
+Also not verified: the Gemini importer against a real Takeout file (it is tested against Google's documented record shape and folder layout), the first-launch macOS warning on a freshly downloaded copy of the release, and the three coding agents against real projects.

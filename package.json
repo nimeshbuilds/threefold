@@ -17,6 +17,7 @@
     "test:run": "vitest run",
     "icons": "node scripts/make-icons.mjs",
     "dist": "electron-vite build && electron-builder --mac --dir",
+    "release:zip": "pnpm dist && node scripts/release.mjs",
     "dist:dmg": "electron-vite build && electron-builder --mac dmg",
     "postinstall": "node node_modules/electron/install.js",
     "test:e2e": "electron-vite build && node tests/e2e/smoke.mjs",

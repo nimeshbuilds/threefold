@@ -17,6 +17,7 @@
 
   --serif: ui-serif, 'New York', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --width: 1080px;
 }
 
@@ -560,6 +561,215 @@ section {
   margin-bottom: 8px;
 }
 
+/* ---------- quick start and import ---------- */
+
+.paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+  margin-top: 36px;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+  margin-top: 36px;
+}
+
+.path,
+.import-card,
+.then {
+  min-width: 0;
+  padding: 26px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.import-card {
+  border-top: 4px solid var(--c);
+}
+
+.then {
+  margin-top: 18px;
+}
+
+.then p {
+  margin-top: 8px;
+  color: var(--text-2);
+}
+
+.path-tag {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.path-meta {
+  margin-top: 8px;
+  font-size: 14.5px;
+  color: var(--text-3);
+}
+
+.small {
+  margin-top: 16px;
+  font-size: 14.5px;
+  color: var(--text-3);
+}
+
+.warn {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--ember) 45%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ember) 9%, transparent);
+  font-size: 15.5px;
+  color: var(--text-2);
+}
+
+.warn p + p {
+  margin-top: 8px;
+}
+
+.warn strong {
+  color: var(--text);
+}
+
+.numbered {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: item;
+}
+
+.numbered > li {
+  position: relative;
+  min-width: 0;
+  padding-left: 40px;
+  counter-increment: item;
+  font-size: 15.5px;
+  color: var(--text-2);
+}
+
+.numbered > li + li {
+  margin-top: 18px;
+}
+
+.numbered > li::before {
+  content: counter(item);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.numbered.compact > li + li {
+  margin-top: 14px;
+}
+
+.numbered p + p,
+.numbered p + pre {
+  margin-top: 10px;
+}
+
+.numbered strong,
+.then strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.numbered .small {
+  margin-top: 10px;
+}
+
+.numbered .button {
+  height: 42px;
+  font-size: 15.5px;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  font: 0.88em var(--mono);
+  overflow-wrap: anywhere;
+}
+
+pre.cmd {
+  position: relative;
+  margin: 10px 0 0;
+  padding: 11px 70px 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--band);
+}
+
+pre.cmd + pre.cmd {
+  margin-top: 8px;
+}
+
+/* Long commands wrap instead of scrolling; the Copy button copies them whole. */
+pre.cmd code {
+  display: block;
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font: 600 12.5px var(--sans);
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--text);
+}
+
+.more {
+  margin-top: 22px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 15.5px;
+  color: var(--text-2);
+}
+
+.more summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.more p {
+  margin-top: 10px;
+}
+
 /* ---------- status and footer ---------- */
 
 .status {
@@ -608,6 +818,8 @@ footer p {
   .credit-grid,
   .mode-grid,
   .privacy-grid,
+  .paths,
+  .import-grid,
   .steps,
   .setup,
   .features,
@@ -618,6 +830,11 @@ footer p {
 
   .split.reverse > div {
     order: 2;
+  }
+
+  /* Give commands the full width of the card instead of the list's indent. */
+  .numbered pre.cmd {
+    margin-left: -40px;
   }
 
   .tabs {

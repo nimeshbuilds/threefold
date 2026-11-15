@@ -33,10 +33,11 @@
       <a href="#review">Review</a>
       <a href="#research">Research</a>
       <a href="#cost">Cost</a>
-      <a href="#setup">Setup</a>
+      <a href="#start">Quick start</a>
+      <a href="#import">Import</a>
       <a href="https://github.com/nimeshbuilds/threefold">GitHub</a>
     </nav>
-    <span class="status-pill">In development</span>
+    <span class="status-pill">Early preview</span>
   </header>
 
   <main id="main">
@@ -49,10 +50,10 @@
         with the cost of every message shown while it is being written.
       </p>
       <div class="hero-actions">
-        <a class="button primary" href="https://github.com/nimeshbuilds/threefold">Get the source on GitHub</a>
-        <a class="button" href="#setup">See how setup works</a>
+        <a class="button primary" href="#start">Download for Mac</a>
+        <a class="button" href="https://github.com/nimeshbuilds/threefold">Source on GitHub</a>
       </div>
-      <p class="fineprint">No account, no server, no telemetry. Runs from source today; there is no packaged download yet.</p>
+      <p class="fineprint">No account, no server, no telemetry. The download is for Apple Silicon Macs on macOS 13 or later, and it is not signed by Apple: the <a href="#start">quick start</a> shows what that means, or how to build it yourself.</p>
 
       <div class="showcase" data-showcase>
         <div class="tabs" role="tablist" aria-label="Screens">
@@ -242,7 +243,123 @@
       </div>
     </section>
 
-    <section id="setup" aria-labelledby="setup-title">
+    <section id="start" aria-labelledby="start-title">
+      <h2 id="start-title">Quick start</h2>
+      <p class="section-lede">
+        Two ways to get Threefold onto your Mac: download the ready-made app, or build it yourself from the source.
+        Both take a few minutes.
+      </p>
+
+      <div class="paths">
+        <article class="path">
+          <p class="path-tag">Option A</p>
+          <h3>Download the app</h3>
+          <p class="path-meta">Version 0.4.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+
+          <div class="warn" role="note">
+            <p><strong>Read this first: the app is not signed by Apple.</strong></p>
+            <p>
+              Threefold is not signed with an Apple Developer ID and has not been notarized, so Apple has not checked
+              this build. macOS blocks apps like that by default, and you have to allow it yourself, once, in System
+              Settings (steps 3 to 5). Apple advises against doing this for software you do not trust. If you would
+              rather not, use Option B: the source is public, and an app built on your own Mac opens without the warning.
+            </p>
+          </div>
+
+          <ol class="numbered">
+            <li>
+              <p>Download the ZIP (about 290 MB).</p>
+              <p><a class="button primary" href="https://github.com/nimeshbuilds/threefold/releases/latest/download/Threefold-mac-arm64.zip">Download Threefold-mac-arm64.zip</a></p>
+              <p class="small">The checksum and older versions are on the <a href="https://github.com/nimeshbuilds/threefold/releases">releases page</a>.</p>
+            </li>
+            <li>
+              <p>Double-click the ZIP in your Downloads folder, then drag <strong>Threefold</strong> into <strong>Applications</strong>.</p>
+            </li>
+            <li>
+              <p>
+                Double-click Threefold. macOS stops it and says Apple could not verify the app. Click
+                <strong>Done</strong>. Do not choose Move to Trash.
+              </p>
+            </li>
+            <li>
+              <p>
+                Open <strong>System Settings → Privacy &amp; Security</strong> and scroll down to
+                <strong>Security</strong>. Next to the note that Threefold was blocked, click
+                <strong>Open Anyway</strong>. The button is only there for about an hour after step 3.
+              </p>
+            </li>
+            <li>
+              <p>
+                Confirm with <strong>Open Anyway</strong> and enter your Mac login password. Threefold opens, and from
+                now on a normal double-click is enough.
+              </p>
+            </li>
+          </ol>
+
+          <details class="more">
+            <summary>Prefer Terminal, or macOS says the app "is damaged"?</summary>
+            <p>
+              This removes the "downloaded from the internet" flag from the app, so macOS skips the check. Run it after
+              step 2, then open Threefold normally.
+            </p>
+            <pre class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Threefold.app</code></pre>
+          </details>
+          <p class="small">
+            These are Apple's own steps for
+            <a href="https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac">opening an app from an unknown developer</a>.
+            On an Intel Mac, use Option B. After you replace the app with a newer version, macOS may ask once for your
+            login password so Threefold can read its saved keys; choose Always Allow.
+          </p>
+        </article>
+
+        <article class="path">
+          <p class="path-tag">Option B</p>
+          <h3>Build it from source</h3>
+          <p class="path-meta">Needs macOS 13 or later, Git, Node.js 22 or later and pnpm 10</p>
+
+          <ol class="numbered">
+            <li>
+              <p>
+                Install the tools you are missing. Git comes with Apple's command line tools; Node.js is at
+                <a href="https://nodejs.org/">nodejs.org</a>. Then install pnpm:
+              </p>
+              <pre class="cmd"><code>xcode-select --install</code></pre>
+              <pre class="cmd"><code>npm install -g pnpm@10</code></pre>
+            </li>
+            <li>
+              <p>Get the source and go into its folder.</p>
+              <pre class="cmd"><code>git clone https://github.com/nimeshbuilds/threefold</code></pre>
+              <pre class="cmd"><code>cd threefold</code></pre>
+            </li>
+            <li>
+              <p>Install what it depends on. This downloads Electron, so give it a few minutes.</p>
+              <pre class="cmd"><code>pnpm install</code></pre>
+            </li>
+            <li>
+              <p>Run it. This starts Threefold straight from the source, with no macOS warning.</p>
+              <pre class="cmd"><code>pnpm dev</code></pre>
+            </li>
+            <li>
+              <p>
+                Optional: build a real app you can keep in Applications. It lands in
+                <code>dist/mac-arm64/Threefold.app</code>; drag it into Applications.
+              </p>
+              <pre class="cmd"><code>pnpm dist</code></pre>
+            </li>
+          </ol>
+          <p class="small">
+            Want to look around before connecting anything? <code>pnpm demo</code> starts the app with canned replies,
+            no keys and no network calls.
+          </p>
+        </article>
+      </div>
+
+      <p class="fineprint center">
+        Either way, the first launch opens a short wizard that connects your API keys. That part is next.
+      </p>
+    </section>
+
+    <section id="setup" class="band" aria-labelledby="setup-title">
       <h2 id="setup-title">Setup is three steps per provider</h2>
       <p class="section-lede">A short wizard walks you through it on first launch. Connect one, two or all three.</p>
       <ol class="setup">
@@ -260,6 +377,65 @@
         </li>
       </ol>
       <p class="fineprint center">No plan credits? It still works. Usage is then billed to the payment method on your API account.</p>
+    </section>
+
+    <section id="import" aria-labelledby="import-title">
+      <h2 id="import-title">Bring your chat history with you</h2>
+      <p class="section-lede">
+        Ask each company for an export of your data, then hand the ZIP to Threefold. Your old chats appear in that
+        mode's sidebar and can be continued through the API.
+      </p>
+
+      <div class="import-grid">
+        <article class="import-card ember">
+          <h3>Claude</h3>
+          <ol class="numbered compact">
+            <li>On <a href="https://claude.ai/settings">claude.ai</a> or in the Claude desktop app (not the phone app), open <strong>Settings → Privacy</strong> and click <strong>Export data</strong>.</li>
+            <li>Claude emails a download link to your account's address. Open it while signed in; it expires after 24 hours.</li>
+            <li>Download the ZIP. Do not unzip it.</li>
+          </ol>
+          <p class="small">On a Team or Enterprise plan, export works only if an owner has allowed members to export their data.</p>
+        </article>
+
+        <article class="import-card ink">
+          <h3>ChatGPT</h3>
+          <ol class="numbered compact">
+            <li>In <a href="https://chatgpt.com/">ChatGPT</a>, open your profile menu, then <strong>Settings → Data controls</strong>. Next to <strong>Export data</strong> click <strong>Export</strong>, then <strong>Confirm export</strong>.</li>
+            <li>ChatGPT emails or texts you when the export is ready. That is often quick but can take days. Download it while signed in to the same account; the link expires after 24 hours.</li>
+            <li>Keep the ZIP as it is. Do not unzip it.</li>
+          </ol>
+          <p class="small">Business and Enterprise workspaces do not offer this export.</p>
+        </article>
+
+        <article class="import-card tide">
+          <h3>Gemini</h3>
+          <ol class="numbered compact">
+            <li>Open <a href="https://takeout.google.com/">Google Takeout</a> and click <strong>Deselect all</strong>. Scroll to <strong>My Activity</strong> and tick it. Not the separate <em>Gemini</em> entry: that one holds your Gems, not your chats.</li>
+            <li>Under My Activity click <strong>All activity data included</strong>, choose <strong>Deselect all</strong>, tick only <strong>Gemini Apps</strong> and confirm.</li>
+            <li>Still under My Activity click <strong>Multiple formats</strong> and set <strong>Activity records</strong> to <strong>JSON</strong>. The default is HTML, which Threefold cannot read.</li>
+            <li>Click <strong>Next step</strong>, then <strong>Create export</strong>. Google emails you a download link. Do not unzip the file.</li>
+          </ol>
+          <p class="small">
+            Google exports an activity log, not conversations, so Threefold groups prompts made within half an hour of
+            each other into one chat. Only activity Gemini was saving is included, and work or school accounts may not
+            allow the export.
+          </p>
+        </article>
+      </div>
+
+      <div class="then">
+        <h3>Then, in Threefold</h3>
+        <p>
+          Open <strong>Settings → Import history</strong>. Under that provider's heading click
+          <strong>Choose export file…</strong> and select the ZIP. The first-launch wizard offers the same step.
+          Importing the same export again adds only what is new.
+        </p>
+      </div>
+      <p class="note">
+        An export is a snapshot. Pictures and uploaded files are not part of it, and chats you continue in Threefold do
+        not sync back to the official apps. Reading old chats is free; continuing one sends its history to the API and
+        is billed like any other message.
+      </p>
     </section>
 
     <section id="privacy" class="band" aria-labelledby="privacy-title">
@@ -284,11 +460,14 @@
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is in development and built in public. It runs today from source and as an unsigned Mac build.
-        Its interface, cost tracking and review engine are covered by automated tests; testing against the live APIs
-        is in progress. <strong>There is no packaged download yet.</strong>
+        Threefold is an early preview, built in public. Version 0.4.0 is available as a download for Apple Silicon
+        Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
+        testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>
-      <p><a class="button primary" href="https://github.com/nimeshbuilds/threefold">Source on GitHub</a></p>
+      <p class="hero-actions">
+        <a class="button primary" href="#start">Quick start</a>
+        <a class="button" href="https://github.com/nimeshbuilds/threefold">Source on GitHub</a>
+      </p>
     </section>
   </main>
 
