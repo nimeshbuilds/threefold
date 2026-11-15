@@ -8,12 +8,13 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { tokenCost } from '@shared/pricing'
 import type { AgentContext, AgentResult } from './service'
 
-const require = createRequire(import.meta.url)
+// Named so it cannot clash with the `require` the bundler injects into ESM output.
+const nodeRequire = createRequire(import.meta.url)
 
 /** In a packaged app the bundled CLI binary lives outside the asar archive. */
 function bundledExecutable(): string | undefined {
   try {
-    const pkg = require.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`)
+    const pkg = nodeRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`)
     const binary = pkg.replace(/package\.json$/, process.platform === 'win32' ? 'claude.exe' : 'claude')
     return binary.includes('app.asar') ? binary.replace('app.asar', 'app.asar.unpacked') : undefined
   } catch {

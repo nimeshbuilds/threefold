@@ -8,11 +8,12 @@ import type {
   CodeItem,
   CodeSession,
   PermissionDecision,
+  PermissionRequest,
   Provider,
   SpendSummary,
 } from '@shared/types'
 import type { Secrets } from '../secrets'
-import { codeMetaOf, type Store } from '../store'
+import type { Store } from '../store'
 import { DEMO } from '../chat'
 import { runClaudeAgent } from './claudeAgent'
 import { runOpenAIAgent } from './openaiAgent'
@@ -42,7 +43,11 @@ export interface AgentResult {
 
 export class CodeService {
   private running = new Map<string, AbortController>()
-  private pending = new Map<string, { sessionId: string; resolve: (decision: PermissionDecision) => void }>()
+  private pending = new Map<
+    string,
+    { sessionId: string; request: PermissionRequest; resolve: (decision: PermissionDecision) => void }
+  >()
+  private active = new Map<string, CodeSession>()
 
   constructor(
     private readonly store: Store,
@@ -67,6 +72,14 @@ export class CodeService {
     }
     this.store.saveCodeSession(session)
     return session
+  }
+
+  /** The session as it is right now, including work in progress that is not on disk yet. */
+  get(sessionId: string): CodeSession | null {
+    const session = this.active.get(sessionId) ?? this.store.getCodeSession(sessionId)
+    if (!session) return null
+    const waiting = [...this.pending.values()].find((p) => p.sessionId === sessionId)
+    return { ...session, running: this.running.has(sessionId), pendingPermission: waiting?.request }
   }
 
   stop(sessionId: string): void {
@@ -107,7 +120,11 @@ export class CodeService {
 
     const controller = new AbortController()
     this.running.set(sessionId, controller)
-    void this.run(session, prompt.trim(), apiKey, controller).finally(() => this.running.delete(sessionId))
+    this.active.set(sessionId, session)
+    void this.run(session, prompt.trim(), apiKey, controller).finally(() => {
+      this.running.delete(sessionId)
+      this.active.delete(sessionId)
+    })
     return { ok: true }
   }
 
@@ -146,14 +163,10 @@ export class CodeService {
       ask: async (tool, summary, detail) => {
         if (controller.signal.aborted) return false
         if (session.autoAllow.includes(tool)) return true
-        const requestId = randomUUID()
+        const request: PermissionRequest = { requestId: randomUUID(), sessionId: session.id, tool, summary, detail }
         const decision = await new Promise<PermissionDecision>((resolve) => {
-          this.pending.set(requestId, { sessionId: session.id, resolve })
-          this.send({
-            type: 'permission',
-            sessionId: session.id,
-            request: { requestId, sessionId: session.id, tool, summary, detail },
-          })
+          this.pending.set(request.requestId, { sessionId: session.id, request, resolve })
+          this.send({ type: 'permission', sessionId: session.id, request })
         })
         if (decision === 'allow-always') session.autoAllow.push(tool)
         return decision !== 'deny'
@@ -200,7 +213,7 @@ export class CodeService {
     })
     const meta = this.store.saveCodeSession(session)
     this.send({ type: 'usage', sessionId: session.id, costUsd: session.costUsd, estimated: result.estimated })
-    this.send({ type: 'done', sessionId: session.id, meta: codeMetaOf(session) ?? meta })
+    this.send({ type: 'done', sessionId: session.id, meta })
     this.sendSpend(this.store.spendSummary())
   }
 }

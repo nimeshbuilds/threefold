@@ -286,7 +286,7 @@ export function registerIpc(deps: IpcDeps): void {
   // ---------- code ----------
 
   handle('code:list', () => store.listCodeSessions())
-  handle('code:get', (id: string) => store.getCodeSession(id))
+  handle('code:get', (id: string) => code.get(id))
   handle('code:create', async (provider: Provider) => {
     if (!isProvider(provider)) return null
     const result = await openDialog({

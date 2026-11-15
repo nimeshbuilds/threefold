@@ -223,6 +223,10 @@ export interface CodeSession extends CodeSessionMeta {
   replay?: unknown[]
   /** Tool kinds the user chose to always allow in this session. */
   autoAllow: string[]
+  /** Set by the main process when it returns a session: is the agent working right now? */
+  running?: boolean
+  /** A permission prompt that is still waiting for an answer. */
+  pendingPermission?: PermissionRequest
 }
 
 export interface PermissionRequest {

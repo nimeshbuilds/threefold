@@ -1,0 +1,133 @@
+/*
+ * Twofold design tokens.
+ *
+ * Two modes, each with a light and a dark theme. Claude mode is warm paper and
+ * a serif reading face; ChatGPT mode is neutral and all sans. Brand colours
+ * (Ember, Ink, Paper) are Twofold's own.
+ */
+
+:root {
+  --ember: #c2571a;
+  --ink: #1f2430;
+  --paper: #f7f4ec;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: ui-serif, 'New York', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --sidebar-width: 272px;
+  --content-width: 760px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+
+  --good: #2e8b57;
+  --bad: #c0392b;
+  --warn: #b7791f;
+}
+
+/* ---------- Claude mode ---------- */
+
+[data-mode='claude'] {
+  --font-reading: var(--font-serif);
+  --font-heading: var(--font-serif);
+  --reading-size: 16.5px;
+  --composer-radius: 18px;
+  --bubble-radius: 14px;
+  --button-radius: 9px;
+}
+
+[data-mode='claude'][data-theme='light'] {
+  --bg: #f7f4ec;
+  --surface: #ffffff;
+  --surface-2: #f1ede2;
+  --sidebar: #efebdf;
+  --text: #26241f;
+  --text-2: #6b675d;
+  --text-3: #9a958a;
+  --border: #e0dbcc;
+  --border-strong: #cfc9b8;
+  --accent: #b4541a;
+  --accent-soft: rgba(180, 84, 26, 0.1);
+  --accent-contrast: #ffffff;
+  --bubble: #ebe6d8;
+  --hover: rgba(70, 58, 34, 0.07);
+  --active: rgba(70, 58, 34, 0.12);
+  --code-bg: #f0ece0;
+  --shadow: 0 1px 2px rgba(60, 48, 24, 0.06), 0 8px 24px rgba(60, 48, 24, 0.08);
+  color-scheme: light;
+}
+
+[data-mode='claude'][data-theme='dark'] {
+  --bg: #262522;
+  --surface: #302e2a;
+  --surface-2: #2b2a26;
+  --sidebar: #1f1e1b;
+  --text: #ede9df;
+  --text-2: #a9a498;
+  --text-3: #7c776c;
+  --border: #3d3a35;
+  --border-strong: #4e4a43;
+  --accent: #e08a4f;
+  --accent-soft: rgba(224, 138, 79, 0.14);
+  --accent-contrast: #201a14;
+  --bubble: #3a3833;
+  --hover: rgba(255, 244, 220, 0.06);
+  --active: rgba(255, 244, 220, 0.11);
+  --code-bg: #1c1b19;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+/* ---------- ChatGPT mode ---------- */
+
+[data-mode='chatgpt'] {
+  --font-reading: var(--font-ui);
+  --font-heading: var(--font-ui);
+  --reading-size: 15.5px;
+  --composer-radius: 26px;
+  --bubble-radius: 20px;
+  --button-radius: 999px;
+}
+
+[data-mode='chatgpt'][data-theme='light'] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f6f6f7;
+  --sidebar: #f7f7f8;
+  --text: #0f0f10;
+  --text-2: #5f6063;
+  --text-3: #8e8f93;
+  --border: #e4e4e7;
+  --border-strong: #d2d2d6;
+  --accent: #18181b;
+  --accent-soft: rgba(24, 24, 27, 0.07);
+  --accent-contrast: #ffffff;
+  --bubble: #f1f1f3;
+  --hover: rgba(15, 15, 16, 0.055);
+  --active: rgba(15, 15, 16, 0.1);
+  --code-bg: #f6f6f7;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.08);
+  color-scheme: light;
+}
+
+[data-mode='chatgpt'][data-theme='dark'] {
+  --bg: #1e1f22;
+  --surface: #2a2b2f;
+  --surface-2: #25262a;
+  --sidebar: #17181a;
+  --text: #ececee;
+  --text-2: #a4a5aa;
+  --text-3: #74757b;
+  --border: #36373c;
+  --border-strong: #47484e;
+  --accent: #f2f2f3;
+  --accent-soft: rgba(242, 242, 243, 0.1);
+  --accent-contrast: #18181b;
+  --bubble: #2f3035;
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.11);
+  --code-bg: #151618;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}

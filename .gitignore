@@ -7,3 +7,5 @@ dist/
 .env.*
 .vite/
 coverage/
+.demo-data/
+tests/e2e/screenshots/
