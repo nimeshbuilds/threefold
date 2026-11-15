@@ -35,6 +35,16 @@ export function codexArgs(input: { prompt: string; resume?: string; model?: stri
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+/**
+ * Codex runs every command through a login shell: /bin/zsh -lc "ls -la".
+ * For display, the wrapper is taken off and the command itself is shown.
+ */
+export function shownCommand(command: string): string {
+  const wrapped = command.match(/^(?:\/\S+\/)?(?:zsh|bash|sh)\s+-l?c\s+(["'])([\s\S]*)\1\s*$/)
+  if (!wrapped) return command
+  return wrapped[1] === '"' ? wrapped[2]!.replace(/\\(["\\$`])/g, '$1') : wrapped[2]!
+}
 const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
 
 export async function runCodexCli(ctx: AgentContext, run: CliRun, deps: { model?: string }): Promise<CliRunResult> {
@@ -72,7 +82,7 @@ export async function runCodexCli(ctx: AgentContext, run: CliRun, deps: { model?
         ctx.emit.item({ id, type: 'thinking', text: text(item.text) })
         break
       case 'command_execution': {
-        const command = text(item.command)
+        const command = shownCommand(text(item.command))
         const status = item.status === 'failed' ? 'error' : item.status === 'completed' ? 'done' : done ? 'done' : 'running'
         ctx.emit.item({
           id,

@@ -21,7 +21,7 @@ import { DEMO, keyHelp } from '../chat'
 import { runClaudeAgent } from './claudeAgent'
 import { claudePermissionMode, runClaudeCli } from './claudeCli'
 import { CLI, type CliManager } from './cli'
-import type { CliRun, CliRunResult } from './cliRun'
+import { EXPIRED_TEXT, type CliRun, type CliRunResult } from './cliRun'
 import { CODEX_SANDBOX_NOTE, runCodexCli } from './codexCli'
 import { runGeminiAgent } from './geminiAgent'
 import { runOpenAIAgent } from './openaiAgent'
@@ -340,12 +340,19 @@ export class CodeService {
         cli.noteLimit(provider, until)
         why = `Your ${plan}’s usage limit is reached${fallback.resetsAt ? ` (it resets at ${clock(until)})` : ''}.`
       } else {
-        why = `${spec.name} is not signed in to your ${plan}.`
+        why = EXPIRED_TEXT.test(fallback.detail)
+          ? `${spec.name}’s sign-in to your ${plan} has expired.`
+          : `${spec.name} is not signed in to your ${plan}.`
       }
+      const signIn = 'Sign in again under “Use subscription” to use your plan.'
       if (!apiKey) {
-        return nothing(`${why} Add an API key in Settings and Threefold will carry on with it when this happens.`)
+        return nothing(
+          fallback.reason === 'limit'
+            ? `${why} Add an API key in Settings and Threefold will carry on with it when this happens.`
+            : `${why} ${signIn}`,
+        )
       }
-      note(`${why} Carrying on with your API key.`)
+      note(fallback.reason === 'limit' ? `${why} Carrying on with your API key.` : `${why} Carrying on with your API key. ${signIn}`)
       // The request is sent again, because the cut-off attempt may or may not have saved it.
       const again = progressed
         ? `The previous attempt at the request below was cut off before it finished. Carry on from where it stopped and do not redo work that is already done.\n\n${context.prompt}`

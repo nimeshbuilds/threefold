@@ -161,9 +161,14 @@ export async function runClaudeCli(
     }
 
     if (message.type === 'assistant' && isRecord(message.message)) {
-      if (message.error === 'rate_limit') limited('Your plan’s usage limit is reached.')
-      if (message.error === 'authentication_failed') signedOut('Claude Code is not signed in.')
       const inner = message.message
+      // An error arrives as an ordinary message whose text says what went wrong.
+      const said = (Array.isArray(inner.content) ? inner.content : [])
+        .map((block) => (isRecord(block) && block.type === 'text' && typeof block.text === 'string' ? block.text : ''))
+        .join(' ')
+        .trim()
+      if (message.error === 'rate_limit') limited(said || 'Your plan’s usage limit is reached.')
+      if (message.error === 'authentication_failed') signedOut(said || 'Claude Code is not signed in.')
       for (const block of Array.isArray(inner.content) ? inner.content : []) {
         if (!isRecord(block) || block.type !== 'tool_use' || typeof block.id !== 'string' || typeof block.name !== 'string') continue
         const { summary, detail } = summarize(block.name, isRecord(block.input) ? block.input : {})

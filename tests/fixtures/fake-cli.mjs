@@ -98,10 +98,15 @@ async function claudeRun() {
     process.exitCode = isError ? 1 : 0
   }
 
-  out({ type: 'system', subtype: 'init', session_id: sessionId, model, apiKeySource: onKey ? 'ANTHROPIC_API_KEY' : 'none' })
+  // As the real tool does: on a plan the model is named with its context window in brackets, and a
+  // status message follows the first one.
+  out({ type: 'system', subtype: 'init', session_id: sessionId, model: flag('--model') ?? `${model}[1m]`, apiKeySource: onKey ? 'ANTHROPIC_API_KEY' : 'none', permissionMode: 'default' })
+  out({ type: 'system', subtype: 'status', session_id: sessionId })
   if (!onKey && !state.loggedIn) {
-    out({ type: 'assistant', error: 'authentication_failed', message: { id: 'msg_auth', model, role: 'assistant', content: [{ type: 'text', text: 'Not logged in · Please run /login' }], usage: usage(0, 0) } })
-    return end('Not logged in · Please run /login', true)
+    // The second wording is what Claude Code 2.1.281 really printed with a sign-in that had run out.
+    const said = state.expired ? 'Failed to authenticate: OAuth session expired and could not be refreshed' : 'Not logged in · Please run /login'
+    out({ type: 'assistant', error: 'authentication_failed', message: { id: 'msg_auth', model, role: 'assistant', content: [{ type: 'text', text: said }], usage: usage(0, 0) } })
+    return end(said, true)
   }
   if (!onKey && (state.limit || /LIMIT/.test(prompt))) {
     if (/HALFWAY/.test(prompt)) await say('msg_half', 'I got part of the way. ', 800, 12)
@@ -157,10 +162,10 @@ async function codexRun() {
     return fail("You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes.")
   }
   out({ type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'Checking what is in the folder.' } })
-  out({ type: 'item.started', item: { id: 'item_1', type: 'command_execution', command: 'ls -la', aggregated_output: '', status: 'in_progress' } })
+  out({ type: 'item.started', item: { id: 'item_1', type: 'command_execution', command: '/bin/zsh -lc "ls -la"', aggregated_output: '', status: 'in_progress' } })
   if (/SLOW/.test(prompt)) await sleep(8000)
   await sleep(40)
-  out({ type: 'item.completed', item: { id: 'item_1', type: 'command_execution', command: 'ls -la', aggregated_output: 'notes.txt\nREADME.md\n', exit_code: 0, status: 'completed' } })
+  out({ type: 'item.completed', item: { id: 'item_1', type: 'command_execution', command: '/bin/zsh -lc "ls -la"', aggregated_output: 'notes.txt\nREADME.md\n', exit_code: 0, status: 'completed' } })
   out({ type: 'item.completed', item: { id: 'item_2', type: 'file_change', changes: [{ path: `${process.cwd()}/notes.txt`, kind: 'update' }], status: 'completed' } })
   out({ type: 'item.completed', item: { id: 'item_3', type: 'agent_message', text: 'Done: notes.txt now says final.' } })
   out({ type: 'turn.completed', usage: { input_tokens: 5000, cached_input_tokens: 1000, cache_write_input_tokens: 0, output_tokens: 300, reasoning_output_tokens: 100 } })

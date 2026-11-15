@@ -182,7 +182,9 @@ export const TOOL_FEES = {
   openaiContainerMinutes: 20,
 }
 
-export function findModel(id: string): ModelInfo | undefined {
+export function findModel(rawId: string): ModelInfo | undefined {
+  // Claude Code names a model with its context window in brackets ("claude-opus-5-5[1m]").
+  const id = rawId.replace(/\[[^\]]*\]$/, '')
   const exact = MODELS.find((m) => m.id === id)
   if (exact) return exact
   // Providers sometimes return a dated snapshot id ("gpt-6.1-sol-2026-09-30").

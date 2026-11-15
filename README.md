@@ -370,7 +370,11 @@ Deep research is left out of that run because it takes minutes and costs real mo
 
 Also not verified: the Gemini importer against a real Takeout file (it is tested against Google's documented record shape and folder layout), the first-launch macOS warning on a freshly downloaded copy of the release, and the three coding agents against real projects.
 
-Not verified for coding on a subscription: a real run on a real plan. The tests use stand-ins that play Claude Code and Codex, written from the tools' documented output. Against the real tools on a real Mac, only this much was checked: that Threefold finds them, reads their version, install method and sign-in state correctly, and that both accept the exact options Threefold passes. What a real usage-limit message looks like, and installing or signing in for real, were not exercised.
+Coding on a subscription, checked against the real tools on a real Mac:
+
+- **Codex, for real.** One real session through Codex 0.156.1 on a ChatGPT plan: Threefold ran it, Codex made the edit inside its sandbox, the transcript and the "ran on your plan" line were right, and nothing was billed to an API key. Codex's real output matched what Threefold's parser expects line for line.
+- **Claude Code, partly.** With the real Claude Code 2.1.281, Threefold finds it and reads its version, install method and sign-in state; Claude Code accepts the options Threefold passes and connects to Threefold's permission server; and an expired sign-in is recognised and reported with the right advice.
+- **Not yet checked for real:** a Claude Code run on a real plan (the sign-in on the test Mac had expired, and signing in is the user's to do), a real permission prompt from Claude Code, a real usage-limit message from either tool, and installing, updating or signing in for real. Those paths are covered by stand-ins that play the two tools, written from their documented output and corrected against what the real tools printed.
 
 Not verified for fallback and handoff: a summary written by a real model (the tests use stand-in providers, so the quality of real summaries is untested), and uploading the `threefolds` skill inside the official Claude, ChatGPT and Gemini apps. The install steps follow each company's help pages as they read in November 2026; the skill has not been run inside those apps.
 

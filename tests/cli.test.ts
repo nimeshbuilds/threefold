@@ -9,7 +9,7 @@ import path from 'node:path'
 import readline from 'node:readline'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { CliEvent, CodeEvent, CodeItem, LedgerEntry, PermissionDecision, Provider } from '@shared/types'
-import { formatUsd, tokenCost } from '@shared/pricing'
+import { formatUsd, modelLabel, tokenCost } from '@shared/pricing'
 import {
   CLI,
   CliManager,
@@ -24,7 +24,7 @@ import {
 } from '../src/main/code/cli'
 import { claudeArgs, claudePermissionMode } from '../src/main/code/claudeCli'
 import { LIMIT_TEXT, SIGNED_OUT_TEXT, parseResetTime, toMillis } from '../src/main/code/cliRun'
-import { CODEX_SANDBOX_NOTE, codexArgs } from '../src/main/code/codexCli'
+import { CODEX_SANDBOX_NOTE, codexArgs, shownCommand } from '../src/main/code/codexCli'
 import { PERMISSION_TOOL, PermissionBridge } from '../src/main/code/permissionBridge'
 import { CodeService } from '../src/main/code/service'
 import { Store } from '../src/main/store'
@@ -105,6 +105,23 @@ describe('reading what the tools say about themselves', () => {
     expect(LIMIT_TEXT.test('File not found')).toBe(false)
     expect(SIGNED_OUT_TEXT.test('Not logged in · Please run /login')).toBe(true)
     expect(SIGNED_OUT_TEXT.test('Not logged in. Run `codex login` to sign in.')).toBe(true)
+    // What Claude Code 2.1.281 really printed when its saved sign-in had run out.
+    expect(SIGNED_OUT_TEXT.test('Failed to authenticate: OAuth session expired and could not be refreshed')).toBe(true)
+  })
+
+  it('names a model the way Claude Code reports it on a plan', () => {
+    expect(modelLabel('claude-opus-5-5[1m]')).toBe('Claude Opus 5.5')
+    expect(tokenCost('claude-opus-5-5[1m]', { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10 })).toBe(
+      tokenCost('claude-opus-5-5', { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10 }),
+    )
+  })
+
+  it('shows the command Codex ran, without the login shell it was wrapped in', () => {
+    // The shape the real Codex 0.156.1 reported.
+    expect(shownCommand('/bin/zsh -lc "python3 - <<\'PY\'\nprint(\\"hi\\")\nPY"')).toBe('python3 - <<\'PY\'\nprint("hi")\nPY')
+    expect(shownCommand("bash -lc 'ls -la'")).toBe('ls -la')
+    expect(shownCommand('sh -c "echo \\$HOME"')).toBe('echo $HOME')
+    expect(shownCommand('git status')).toBe('git status')
   })
 
   it('builds the command lines the tools document', () => {
@@ -496,8 +513,30 @@ describe('a Claude session on the subscription', () => {
     store.updateSettings({ subscription: { claude: true, chatgpt: false } })
     const items = await turn(service.create('claude', work()).id, 'Do the thing')
     expect(fake('claude').calls.map((call) => call.auth)).toEqual(['plan', 'api'])
-    expect(notices(items)[0]).toBe('Claude Code is not signed in to your Claude plan. Carrying on with your API key.')
+    expect(notices(items)[0]).toBe(
+      'Claude Code is not signed in to your Claude plan. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
+    )
     bridge.stop()
+  })
+
+  it('says so when the sign-in has expired, with or without an API key to fall back on', async () => {
+    setFake('claude', { loggedIn: false, expired: true } as never)
+    const withKey = harness()
+    withKey.store.updateSettings({ subscription: { claude: true, chatgpt: false } })
+    const first = await withKey.turn(withKey.service.create('claude', work()).id, 'Do the thing')
+    expect(withKey.notices(first)[0]).toBe(
+      'Claude Code’s sign-in to your Claude plan has expired. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
+    )
+    expect(withKey.notices(first).at(-1)).toMatch(/^Ran on your API key/)
+    withKey.bridge.stop()
+
+    fs.rmSync(path.join(dir, 'data'), { recursive: true, force: true })
+    const noKey = harness({ keys: {} })
+    noKey.store.updateSettings({ subscription: { claude: true, chatgpt: false } })
+    const second = await noKey.turn(noKey.service.create('claude', work()).id, 'Do the thing')
+    expect(noKey.notices(second)).toEqual(['Claude Code’s sign-in to your Claude plan has expired. Sign in again under “Use subscription” to use your plan.'])
+    expect(noKey.ledger()).toEqual([])
+    noKey.bridge.stop()
   })
 
   it('runs an existing CLI session on the API key once "use my subscription" is switched off', async () => {
@@ -615,7 +654,9 @@ describe('a ChatGPT session on the subscription', () => {
     const { store, service, turn, notices, bridge } = harness()
     store.updateSettings({ subscription: { claude: false, chatgpt: true } })
     const items = await turn(service.create('chatgpt', work()).id, 'Go')
-    expect(notices(items)).toContain('Codex is not signed in to your ChatGPT plan. Carrying on with your API key.')
+    expect(notices(items)).toContain(
+      'Codex is not signed in to your ChatGPT plan. Carrying on with your API key. Sign in again under “Use subscription” to use your plan.',
+    )
     expect(fake('codex').calls.map((call) => call.auth)).toEqual(['plan', 'api'])
     bridge.stop()
   })

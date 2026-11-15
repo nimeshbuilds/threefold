@@ -37,7 +37,10 @@ export interface CliRunResult {
 /** Words the tools use when a plan's allowance is used up. */
 export const LIMIT_TEXT = /usage limit|limit reached|hit your [a-z ]*limit|rate.?limit|out of (extra )?usage|quota/i
 /** Words the tools use when nobody is signed in. */
-export const SIGNED_OUT_TEXT = /not logged in|not signed in|please run \/login|run `?codex login|login required|authentication_error|authentication failed|oauth token (has )?expired|401 unauthorized/i
+export const SIGNED_OUT_TEXT =
+  /not logged in|not signed in|please run \/login|run `?codex login|login required|authentication_error|authentication failed|failed to authenticate|oauth (token|session) (has )?expired|could not be refreshed|401 unauthorized/i
+/** The sign-in was there once and has run out, as opposed to never having been made. */
+export const EXPIRED_TEXT = /expired|could not be refreshed/i
 
 /**
  * Reads "try again in 2 hours 14 minutes" or "resets at 3:15 PM" out of a
