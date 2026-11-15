@@ -103,7 +103,7 @@ interface State {
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
   artifact: Artifact | null
-  modal: 'settings' | 'onboarding' | 'handoff' | null
+  modal: 'settings' | 'onboarding' | 'handoff' | 'subscription' | null
   settingsTab: SettingsTab
   toast: { text: string; tone: 'info' | 'error' } | null
   /** Text to put back in the composer (after "Edit", or when a handoff was stopped). */
@@ -124,6 +124,8 @@ interface State {
   /** Keep the open chat (or the next new one) on its provider even when credit runs low. */
   setNoFallback(on: boolean): Promise<void>
   openHandoffModal(): void
+  /** Code tab: the panel that sets up coding on a Claude or ChatGPT subscription. */
+  openSubscription(): void
   stop(): void
   regenerate(): void
   editLast(): void
@@ -385,6 +387,10 @@ export const useApp = create<State>((set, get) => ({
 
   openHandoffModal() {
     set({ modal: 'handoff' })
+  },
+
+  openSubscription() {
+    set({ modal: 'subscription' })
   },
 
   stop() {

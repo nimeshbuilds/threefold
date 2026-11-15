@@ -22,7 +22,7 @@ function bundledExecutable(): string | undefined {
   }
 }
 
-function summarize(tool: string, input: Record<string, unknown>): { summary: string; detail: string } {
+export function summarize(tool: string, input: Record<string, unknown>): { summary: string; detail: string } {
   const text = (key: string): string => (typeof input[key] === 'string' ? (input[key] as string) : '')
   switch (tool) {
     case 'Bash':
@@ -50,7 +50,7 @@ function summarize(tool: string, input: Record<string, unknown>): { summary: str
   }
 }
 
-function resultText(content: unknown): string {
+export function resultText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content
@@ -73,6 +73,19 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
   let costUsd = 0
   let inputTokens = 0
   let outputTokens = 0
+  // One API request can arrive as several messages with the same id; the last one has its final token counts.
+  const requests = new Map<string, { cost: number | null; input: number; output: number }>()
+  const total = (): { cost: number | null; input: number; output: number } => {
+    let cost: number | null = 0
+    let input = 0
+    let output = 0
+    for (const request of requests.values()) {
+      cost = cost === null || request.cost === null ? null : cost + request.cost
+      input += request.input
+      output += request.output
+    }
+    return { cost, input, output }
+  }
   let error: string | undefined
   let textItem: string | null = null
   let thinkingItem: string | null = null
@@ -146,16 +159,22 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
           toolNames.set(block.id, { name: block.name, summary, input: detail })
           ctx.emit.item({ id: block.id, type: 'tool', name: block.name, summary, input: detail || undefined, status: 'running' })
         }
-        // Running estimate; the final figure comes from the result message.
         const usage = message.message.usage
-        const cost = tokenCost(message.message.model, {
-          inputTokens: usage.input_tokens,
-          cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-          cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
-          outputTokens: usage.output_tokens,
+        const cacheRead = usage.cache_read_input_tokens ?? 0
+        const cacheWrite = usage.cache_creation_input_tokens ?? 0
+        requests.set(message.message.id, {
+          cost: tokenCost(message.message.model, {
+            inputTokens: usage.input_tokens,
+            cacheReadTokens: cacheRead,
+            cacheWriteTokens: cacheWrite,
+            outputTokens: usage.output_tokens,
+          }),
+          input: usage.input_tokens + cacheRead + cacheWrite,
+          output: usage.output_tokens,
         })
-        if (cost !== null) {
-          costUsd += cost
+        const so = total()
+        if (so.cost !== null) {
+          costUsd = so.cost
           ctx.emit.cost(costUsd, true)
         }
         continue
@@ -182,12 +201,22 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
       }
 
       if (message.type === 'result') {
-        costUsd = message.total_cost_usd
-        inputTokens =
-          message.usage.input_tokens +
-          (message.usage.cache_read_input_tokens ?? 0) +
-          (message.usage.cache_creation_input_tokens ?? 0)
-        outputTokens = message.usage.output_tokens
+        // On a resumed session the agent's own total covers the whole conversation, earlier
+        // turns included. This turn's cost is therefore added up from this turn's requests,
+        // and the agent's figure is only used when a model is missing from the price table.
+        const so = total()
+        if (so.cost !== null && requests.size > 0) {
+          costUsd = so.cost
+          inputTokens = so.input
+          outputTokens = so.output
+        } else {
+          costUsd = message.total_cost_usd
+          inputTokens =
+            message.usage.input_tokens +
+            (message.usage.cache_read_input_tokens ?? 0) +
+            (message.usage.cache_creation_input_tokens ?? 0)
+          outputTokens = message.usage.output_tokens
+        }
         ctx.emit.cost(costUsd, false)
         if (message.subtype !== 'success') {
           error =

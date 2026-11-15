@@ -16,10 +16,36 @@ const check = (name, ok, detail = '') => {
   if (!ok) failures.push(name)
 }
 
+// Stand-ins for the Claude Code and Codex CLIs, so the subscription route in the Code tab
+// can be driven without an account. Claude Code starts out of date and signed out.
+const fakeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-fake-cli-'))
+const fakeState = path.join(fakeDir, 'state.json')
+fs.writeFileSync(
+  fakeState,
+  JSON.stringify({
+    claude: { version: '2.1.281', latest: '2.1.325', loggedIn: false, plan: 'max', limit: false, calls: [] },
+    codex: { version: '0.156.1', latest: '0.169.0', loggedIn: true, plan: 'pro', limit: false, calls: [] },
+  }),
+)
+for (const kind of ['claude', 'codex']) {
+  const script = `#!/bin/sh\nFAKE_CLI_KIND=${kind} exec "${process.execPath}" "${path.resolve('tests/fixtures/fake-cli.mjs')}" "$@"\n`
+  fs.writeFileSync(path.join(fakeDir, kind), script, { mode: 0o755 })
+}
+const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-project-'))
+
 const packaged = process.env.THREEFOLD_APP
 const app = await electron.launch({
   ...(packaged ? { executablePath: packaged, args: [] } : { args: ['.'] }),
-  env: { ...process.env, THREEFOLD_DEMO: '1', THREEFOLD_DATA_DIR: dataDir, ELECTRON_RENDERER_URL: '' },
+  env: {
+    ...process.env,
+    THREEFOLD_DEMO: '1',
+    THREEFOLD_DATA_DIR: dataDir,
+    ELECTRON_RENDERER_URL: '',
+    THREEFOLD_CLAUDE_CLI: path.join(fakeDir, 'claude'),
+    THREEFOLD_CODEX_CLI: path.join(fakeDir, 'codex'),
+    THREEFOLD_CLI_LATEST: JSON.stringify({ claude: '2.1.325', chatgpt: '0.169.0' }),
+    FAKE_CLI_STATE: fakeState,
+  },
 })
 const page = await app.firstWindow()
 const errors = []
@@ -295,6 +321,124 @@ try {
   await shot('14-code')
   check('code tab opens', true)
 
+  // ---- coding on a subscription: update the CLI, sign in, run on the plan, fall back to the API key ----
+  const step = (n) => page.locator('.sub-modal .sub-step').nth(n)
+  const stepStatus = (n, pattern) =>
+    page.waitForFunction(
+      ([index, source]) => new RegExp(source).test(document.querySelectorAll('.sub-modal .sub-step .status')[index]?.textContent ?? ''),
+      [n, pattern.source],
+      { timeout: 15000 },
+    )
+  const codeNotice = (words) => page.waitForSelector(`.code-main .msg-error.muted:has-text("${words}")`, { timeout: 20000 })
+  await page.click('.side-btn:has-text("New chat")')
+  await page.click('.mode-switch button:has-text("Claude")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
+  await page.click('.side-btn:has-text("Code")')
+  await page.waitForSelector('.code-layout')
+  check('the code tab offers to use a subscription', /Use subscription/.test((await page.textContent('.sub-button')) ?? ''))
+  check('the code tab says what the subscription route does', /runs Claude Code on your plan first and falls back to your API key/.test((await page.textContent('.code-main')) ?? ''))
+  await page.click('.sub-button')
+  await page.waitForSelector('.sub-modal')
+  await stepStatus(0, /Update available/)
+  const lead = (await page.textContent('.sub-modal .lead')) ?? ''
+  check(
+    'the panel says the plan is used first and the API key after',
+    /Your Claude plan is used first/.test(lead) && /carries on in the same session with your API key/.test(lead),
+    lead,
+  )
+  const cliStep = (await step(0).textContent()) ?? ''
+  check('the panel finds the CLI and sees that it is out of date', /Version 2\.1\.281\. The newest is 2\.1\.325\./.test(cliStep), cliStep)
+  check('the panel shows the exact command an update runs', /claude update/.test(cliStep))
+  check('the panel sees that the CLI is not signed in', /Not signed in/.test((await step(1).textContent()) ?? ''))
+  check('the subscription cannot be switched on before setup is done', await page.locator('.sub-modal .switch').isDisabled())
+  await shot('23-subscription-setup')
+
+  await page.click('.sub-modal .btn:has-text("Update Claude Code")')
+  await stepStatus(0, /Up to date/)
+  const updated = (await step(0).textContent()) ?? ''
+  check('the CLI is updated from inside the app', /Version 2\.1\.325, the newest\./.test(updated) && /Update complete\./.test(updated), updated.slice(0, 160))
+
+  await page.click('.sub-modal .btn:has-text("Sign in with Claude")')
+  await stepStatus(1, /Signed in · Max plan/)
+  const signedIn = (await step(1).textContent()) ?? ''
+  check(
+    'signing in runs the CLI’s own sign-in and passes on its link',
+    /claude\.ai\/oauth\/authorize/.test(signedIn) && /Login successful/.test(signedIn) && /never sees your password or any token/.test(signedIn),
+    signedIn.slice(0, 160),
+  )
+  await page.click('.sub-modal .switch')
+  check('the subscription can be switched on once the CLI is ready', (await page.getAttribute('.sub-modal .switch', 'aria-checked')) === 'true')
+  check('the panel says Claude Code still asks before acting', /still asks you before it edits a file or runs a command/.test((await step(2).textContent()) ?? ''))
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(300)
+  await shot('24-subscription-ready')
+  await page.click('.sub-modal .btn:has-text("Done")')
+  check('the code tab shows that the subscription comes first', /Subscription first/.test((await page.textContent('.sub-button')) ?? ''))
+  check('the code tab describes the plan-first route', /New sessions run Claude Code on your Claude plan first/.test((await page.textContent('.code-main')) ?? ''))
+
+  // The folder picker is a system dialog, so it is answered for the test.
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
+  }, projectDir)
+  await page.click('.code-sessions .btn.primary')
+  await page.waitForSelector('.engine-tag')
+  check('a new session runs through the CLI, plan first', /Claude Code · plan first/.test((await page.textContent('.engine-tag')) ?? ''))
+  await page.fill('.code-main .composer textarea', 'Change draft to final in notes.txt')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.permission', { timeout: 20000 })
+  check('Claude Code asks through Threefold before it edits a file', /Edit notes\.txt/.test((await page.textContent('.permission')) ?? ''))
+  await shot('25-subscription-permission')
+  await page.click('.permission .btn.primary')
+  const planLine = (await (await codeNotice('Ran on your Claude plan')).textContent()) ?? ''
+  check('the turn says it ran on the plan and was not billed to the API key', /Ran on your Claude plan \(Claude Opus 5\.5\)/.test(planLine) && /not billed to your API key/.test(planLine), planLine)
+  check('the allowed edit is shown as done', (await page.locator('.code-main .event-done:has-text("Edit notes.txt")').count()) === 1)
+  check('work on the plan adds nothing to the session’s API cost', /This session \$0\.00 on API/.test((await page.textContent('.code-page .cost-chip')) ?? ''))
+  await shot('26-subscription-plan-run')
+
+  await page.fill('.code-main .composer textarea', 'Now hit the LIMIT')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.permission', { timeout: 20000 })
+  await page.click('.permission .btn.primary')
+  const apiLine = (await (await codeNotice('Ran on your API key')).textContent()) ?? ''
+  const thread = (await page.textContent('.code-main .thread')) ?? ''
+  check(
+    'when the plan’s limit is reached it says so and carries on with the API key',
+    /Your Claude plan’s usage limit is reached \(it resets at [^)]+\)\. Carrying on with your API key\./.test(thread),
+  )
+  check('the part on the API key shows what it cost', /Ran on your API key · \$0\.0\d+ ·/.test(apiLine), apiLine)
+  check('the session’s API cost now counts that part', /This session \$0\.0[1-9]\d* on API/.test((await page.textContent('.code-page .cost-chip')) ?? ''))
+  await shot('27-subscription-fallback')
+  const claudeCalls = JSON.parse(fs.readFileSync(fakeState, 'utf8')).claude.calls
+  check(
+    'the plan run got no API key, and the fallback continued the same session with one',
+    claudeCalls.map((call) => `${call.auth}:${call.resume ?? 'new'}`).join(' ') === 'plan:new plan:claude-session-1 api:claude-session-1',
+    claudeCalls.map((call) => `${call.auth}:${call.resume ?? 'new'}`).join(' '),
+  )
+
+  // The same for ChatGPT mode, where the CLI is Codex.
+  await page.click('.side-btn:has-text("New chat")')
+  await page.click('.mode-switch button:has-text("ChatGPT")')
+  await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt')
+  await page.click('.side-btn:has-text("Code")')
+  await page.click('.sub-button')
+  await page.waitForSelector('.sub-modal')
+  await stepStatus(1, /Signed in/)
+  check('Codex is found already signed in with ChatGPT', /Codex is signed in with your ChatGPT plan/.test((await step(1).textContent()) ?? ''))
+  check('the panel says how Codex differs: a sandbox, and no asking', /Codex does not ask before each step/.test((await step(2).textContent()) ?? ''))
+  await page.click('.sub-modal .switch')
+  await page.click('.sub-modal .btn:has-text("Done")')
+  await page.click('.code-sessions .btn.primary')
+  await page.waitForSelector('.engine-tag')
+  await page.fill('.code-main .composer textarea', 'Change draft to final in notes.txt')
+  await page.keyboard.press('Enter')
+  await codeNotice('Ran on your ChatGPT plan')
+  const codexThread = (await page.textContent('.code-main .thread')) ?? ''
+  check(
+    'Codex runs on the plan in its sandbox and shows its steps',
+    /Codex is working in its own sandbox/.test(codexThread) && /Run: ls -la/.test(codexThread) && /Change notes\.txt/.test(codexThread) && /Done: notes\.txt now says final\./.test(codexThread),
+  )
+  await shot('28-codex-plan-run')
+
   // ---- automatic fallback: a provider that is low on credit hands the chat to another ----
   const answered = () => page.waitForSelector('.msg.assistant:not(.streaming) .usage-line', { timeout: 20000 })
   await page.click('.side-btn:has-text("New chat")')
@@ -461,7 +605,13 @@ try {
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
   check('conversations are saved to disk', saved.length === 11, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
-  check('every request is written to the spend ledger', ledger.length === 19, `${ledger.length} entries`)
+  check('every request is written to the spend ledger', ledger.length === 20, `${ledger.length} entries`)
+  const coding = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'code')
+  check(
+    'only the part of a coding session that ran on the API key is on the ledger',
+    coding.length === 1 && coding[0].provider === 'claude' && coding[0].costUsd > 0,
+    coding.map((entry) => `${entry.provider}:${entry.costUsd}`).join(','),
+  )
   const summaries = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'handoff')
   check(
     'each handoff summary is billed to the provider the chat moved to',
@@ -479,6 +629,8 @@ try {
 } finally {
   await app.close()
   fs.rmSync(dataDir, { recursive: true, force: true })
+  fs.rmSync(fakeDir, { recursive: true, force: true })
+  fs.rmSync(projectDir, { recursive: true, force: true })
 }
 
 console.log(failures.length === 0 ? '\nAll checks passed.' : `\n${failures.length} check(s) failed.`)

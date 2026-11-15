@@ -8,6 +8,7 @@ import { Onboarding } from './components/Onboarding'
 import { ProjectView, ProjectsList } from './components/Projects'
 import { SettingsModal } from './components/Settings'
 import { Sidebar } from './components/Sidebar'
+import { SubscriptionPanel } from './components/Subscription'
 
 const api = window.threefold
 
@@ -72,6 +73,7 @@ export function App() {
       {modal === 'settings' && <SettingsModal />}
       {modal === 'onboarding' && <Onboarding />}
       {modal === 'handoff' && <HandoffModal />}
+      {modal === 'subscription' && <SubscriptionPanel />}
       {toast && (
         <div className={`toast ${toast.tone}`} role="status">
           {toast.text}

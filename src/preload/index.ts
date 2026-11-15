@@ -2,7 +2,7 @@
 // It exposes named functions, never ipcRenderer itself.
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ChatEvent, CodeEvent, Provider, SpendSummary, ThreefoldApi } from '@shared/types'
+import type { ChatEvent, CliEvent, CodeEvent, Provider, SpendSummary, ThreefoldApi } from '@shared/types'
 
 const call =
   (channel: string) =>
@@ -65,6 +65,14 @@ const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => v
   },
   importer: { run: call('import:run') },
   artifacts: { register: call('artifacts:register'), save: call('artifacts:save') },
+  cli: {
+    status: call('cli:status'),
+    install: call('cli:install'),
+    login: call('cli:login'),
+    loginInput: call('cli:loginInput'),
+    cancel: call('cli:cancel'),
+    onEvent: (listener) => subscribe<CliEvent>('cli:event', listener),
+  },
   code: {
     list: call('code:list'),
     get: call('code:get'),

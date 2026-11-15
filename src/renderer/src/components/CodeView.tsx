@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isCliProvider } from '@shared/types'
 import type { CodeEvent, CodeItem, CodeSession, CodeSessionMeta, PermissionRequest } from '@shared/types'
 import { formatUsd, modelLabel } from '@shared/pricing'
 import { MODE_NAME, shortDate } from '../lib/format'
 import { useApp } from '../state'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
+import { CLI_NAME, PLAN_NAME, SubscriptionButton } from './Subscription'
 
 const api = window.threefold
 
@@ -83,6 +85,8 @@ export function CodeView() {
   const models = useApp((s) => s.models[s.mode])
   const notify = useApp((s) => s.notify)
   const openSettings = useApp((s) => s.openSettings)
+  // "Use my subscription first" is switched on for this mode.
+  const onPlan = useApp((s) => (isCliProvider(s.mode) ? Boolean(s.settings?.subscription[s.mode]) : false))
 
   const [sessions, setSessions] = useState<CodeSessionMeta[]>([])
   const [session, setSession] = useState<CodeSession | null>(null)
@@ -179,16 +183,27 @@ export function CodeView() {
   }
 
   const mine = sessions.filter((s) => s.provider === mode)
+  // This session runs through the official CLI (Claude Code or Codex).
+  const cliSession = session?.engine === 'cli' && isCliProvider(session.provider) ? session.provider : null
 
   return (
     <section className="page code-page">
       <header className="topbar">
         <span className="topbar-title muted">Code · {MODE_NAME[mode]} mode</span>
         <span className="topbar-spacer" />
+        <SubscriptionButton />
         {session && (
-          <span className={`cost-chip ${running ? 'live' : ''}`} title="What this coding session has cost so far.">
+          <span
+            className={`cost-chip ${running ? 'live' : ''}`}
+            title={
+              cliSession
+                ? 'What this session has cost on your API key. Work done on your plan is not billed per message.'
+                : 'What this coding session has cost so far.'
+            }
+          >
             {running && <span className="dot" />}
             This session {formatUsd(cost.usd, { estimated: cost.estimated && running })}
+            {cliSession ? ' on API' : ''}
           </span>
         )}
       </header>
@@ -197,7 +212,8 @@ export function CodeView() {
           <button
             className="btn primary block"
             onClick={async () => {
-              if (!hasKey) {
+              // On a subscription the API key is only the fallback, so it is not needed to start.
+              if (!hasKey && !onPlan) {
                 openSettings('keys')
                 return
               }
@@ -238,15 +254,25 @@ export function CodeView() {
                 <Icon name="code" size={40} />
                 <h1>A coding agent in your project folder</h1>
                 <p className="lead">
-                  {mode === 'claude'
-                    ? 'Claude mode runs the Claude Agent SDK (the engine behind Claude Code) with your API key, so the work is billed to your API credits.'
-                    : mode === 'chatgpt'
-                      ? 'ChatGPT mode runs a coding agent on the OpenAI API with file and shell tools. (Codex itself is not covered by the API credits, so this is a separate agent.)'
-                      : 'Gemini mode runs a coding agent on the Gemini API with file and shell tools, billed to your Google credits.'}
+                  {isCliProvider(mode) && onPlan
+                    ? `New sessions run ${CLI_NAME[mode]} on your ${PLAN_NAME[mode]} first. When the plan’s limit is reached, the same session carries on with your API key, and says so.`
+                    : mode === 'claude'
+                      ? 'Claude mode runs the Claude Agent SDK (the engine behind Claude Code) with your API key, so the work is billed to your API credits.'
+                      : mode === 'chatgpt'
+                        ? 'ChatGPT mode runs a coding agent on the OpenAI API with file and shell tools, billed to your API credits.'
+                        : 'Gemini mode runs a coding agent on the Gemini API with file and shell tools, billed to your Google credits.'}
                 </p>
                 <p className="muted small">
-                  It can read the folder freely. Before it edits a file or runs a command it asks you first.
+                  {mode === 'chatgpt' && onPlan
+                    ? 'Codex works in its own sandbox: it can change files in the folder you choose and nowhere else, has no network access, and does not ask before each step.'
+                    : 'It can read the folder freely. Before it edits a file or runs a command it asks you first.'}
                 </p>
+                {isCliProvider(mode) && !onPlan && (
+                  <p className="muted small">
+                    Have a {mode === 'claude' ? 'Claude' : 'ChatGPT'} subscription? <strong>Use subscription</strong>, at the top
+                    right, runs {CLI_NAME[mode]} on your plan first and falls back to your API key.
+                  </p>
+                )}
               </div>
             </div>
           ) : (
@@ -255,10 +281,25 @@ export function CodeView() {
                 <Icon name="folder" size={14} />
                 <span title={session.cwd}>{session.cwd}</span>
                 <span className="topbar-spacer" />
+                {cliSession && (
+                  <span
+                    className="engine-tag"
+                    title={`This session runs through ${CLI_NAME[cliSession]}. ${
+                      onPlan ? `It uses your ${PLAN_NAME[cliSession]} first, then your API key.` : 'Subscription use is switched off, so it runs on your API key.'
+                    }`}
+                  >
+                    {CLI_NAME[cliSession]} · {onPlan ? 'plan first' : 'API key'}
+                  </span>
+                )}
                 <select
                   className="select"
                   value={session.model}
                   disabled={running}
+                  title={
+                    cliSession
+                      ? `Used when your API key pays. On your plan, ${CLI_NAME[cliSession]} picks its own model.`
+                      : 'The model for this session'
+                  }
                   onChange={(event) => setSession({ ...session, model: event.target.value })}
                 >
                   {!models.some((m) => m.id === session.model) && <option value={session.model}>{modelLabel(session.model)}</option>}
@@ -305,7 +346,11 @@ export function CodeView() {
                     }}
                   />
                   <div className="composer-row">
-                    <span className="muted small">Asks before editing files or running commands</span>
+                    <span className="muted small">
+                      {cliSession === 'chatgpt'
+                        ? 'Codex works in a sandbox: this folder only, no network, no asking'
+                        : 'Asks before editing files or running commands'}
+                    </span>
                     <span className="composer-spacer" />
                     {running ? (
                       <button className="send-btn stop" title="Stop" onClick={() => void api.code.stop(session.id)}>

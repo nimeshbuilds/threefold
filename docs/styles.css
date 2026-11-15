@@ -912,3 +912,14 @@ footer .built-by {
 footer .built-by img {
   flex: none;
 }
+
+/* Nine section links need about a thousand pixels; below that they would wrap. */
+@media (max-width: 1020px) {
+  .nav nav {
+    display: none;
+  }
+
+  .status-pill {
+    margin-left: auto;
+  }
+}

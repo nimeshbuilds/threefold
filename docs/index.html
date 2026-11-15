@@ -34,6 +34,7 @@
       <a href="#research">Research</a>
       <a href="#cost">Cost</a>
       <a href="#fallback">Fallback</a>
+      <a href="#code">Code</a>
       <a href="#start">Quick start</a>
       <a href="#handoff">Handoff</a>
       <a href="https://github.com/nimeshbuilds/threefold">GitHub</a>
@@ -272,7 +273,35 @@
       </div>
     </section>
 
-    <section id="start" class="band" aria-labelledby="start-title">
+    <section id="code" class="band" aria-labelledby="code-title">
+      <h2 id="code-title">Code on your subscription first, your API key after</h2>
+      <p class="section-lede">
+        A Claude or ChatGPT plan already covers coding in its maker's own command-line tool. Threefold's Code tab can
+        spend that first, and move to your API credits only when the plan's limit is reached.
+      </p>
+      <div class="split reverse">
+        <div>
+          <ul class="ticks">
+            <li><strong>Plan first.</strong> With "Use subscription" on, a coding session in Claude mode runs through Claude Code, and one in ChatGPT mode through Codex, signed in with your own account.</li>
+            <li><strong>API key after.</strong> When the plan's limit is reached, the same session carries on with your API key, and the transcript says so. Once the limit has reset, the plan is used again.</li>
+            <li><strong>Every turn says what paid.</strong> Either "ran on your plan, not billed to your API key", or the cost on your key. Work on a plan is never counted as API spend.</li>
+            <li><strong>Set up from inside the app.</strong> Threefold checks that the tool is installed and current, installs or updates it with its maker's own command, and starts the tool's own sign-in in your browser.</li>
+          </ul>
+          <p class="note">
+            Threefold runs Claude Code and Codex exactly as Anthropic and OpenAI publish them, and never sees your
+            password or a sign-in token. Claude Code still asks before every edit and command. Codex does not ask: it
+            works in its own sandbox, limited to the project folder and without network access. Your plan's own terms
+            and limits apply.
+          </p>
+        </div>
+        <figure class="window small">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/subscription.png" width="1280" height="840" loading="lazy" alt="A coding session: the first turn ran on the Claude plan and was not billed to the API key; on the second the plan's limit was reached and the session carried on with the API key, with its cost shown">
+        </figure>
+      </div>
+    </section>
+
+    <section id="start" aria-labelledby="start-title">
       <h2 id="start-title">Quick start</h2>
       <p class="section-lede">
         Two ways to get Threefold onto your Mac: download the ready-made app, or build it yourself from the source.
@@ -283,7 +312,7 @@
         <article class="path">
           <p class="path-tag">Option A</p>
           <h3>Download the app</h3>
-          <p class="path-meta">Version 0.5.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+          <p class="path-meta">Version 0.6.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
 
           <div class="warn" role="note">
             <p><strong>Read this first: the app is not signed by Apple.</strong></p>
@@ -388,7 +417,7 @@
       </p>
     </section>
 
-    <section id="setup" aria-labelledby="setup-title">
+    <section id="setup" class="band" aria-labelledby="setup-title">
       <h2 id="setup-title">Setup is three steps per provider</h2>
       <p class="section-lede">A short wizard walks you through it on first launch. Connect one, two or all three.</p>
       <ol class="setup">
@@ -408,7 +437,7 @@
       <p class="fineprint center">No plan credits? It still works. Usage is then billed to the payment method on your API account.</p>
     </section>
 
-    <section id="import" class="band" aria-labelledby="import-title">
+    <section id="import" aria-labelledby="import-title">
       <h2 id="import-title">Bring your chat history with you</h2>
       <p class="section-lede">
         Ask each company for an export of your data, then hand the ZIP to Threefold. Your old chats appear in that
@@ -467,7 +496,7 @@
       </p>
     </section>
 
-    <section id="handoff" aria-labelledby="handoff-title">
+    <section id="handoff" class="band" aria-labelledby="handoff-title">
       <h2 id="handoff-title">Or bring one chat over in a minute, with the threefolds skill</h2>
       <p class="section-lede">
         An export takes a while and brings everything. When you only want to carry on with one conversation, ask the
@@ -546,7 +575,7 @@
       </p>
     </section>
 
-    <section id="privacy" class="band" aria-labelledby="privacy-title">
+    <section id="privacy" aria-labelledby="privacy-title">
       <h2 id="privacy-title">Yours, on your machine</h2>
       <div class="privacy-grid">
         <article>
@@ -559,7 +588,7 @@
         </article>
         <article>
           <h3>Agents ask first</h3>
-          <p>The coding agents read only the folder you choose and ask before every file edit and every command.</p>
+          <p>The coding agents read only the folder you choose and ask before every file edit and every command. Codex on a ChatGPT plan is the one exception: it works in its own sandbox instead.</p>
         </article>
       </div>
       <p class="note">Each provider's own API data policy still applies to what you send it. In a Threefold review, your message and the draft go to every reviewer's provider. When a chat moves to another provider, by automatic fallback or because you handed it off, the conversation so far is sent to that provider so it can write the summary. Deep research runs on ChatGPT and Gemini are stored by that provider, because their long-running modes require it.</p>
@@ -568,7 +597,7 @@
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is an early preview, built in public. Version 0.5.0 is available as a download for Apple Silicon
+        Threefold is an early preview, built in public. Version 0.6.0 is available as a download for Apple Silicon
         Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
         testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>

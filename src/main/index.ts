@@ -4,8 +4,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BrowserWindow, Menu, app, nativeTheme, net, protocol, session, shell } from 'electron'
-import type { ChatEvent, CodeEvent, Provider, SpendSummary } from '@shared/types'
-import { ChatService } from './chat'
+import type { ChatEvent, CliEvent, CodeEvent, Provider, SpendSummary } from '@shared/types'
+import { ChatService, DEMO } from './chat'
+import { CliManager } from './code/cli'
+import { PermissionBridge } from './code/permissionBridge'
 import { CodeService } from './code/service'
 import { registerIpc } from './ipc'
 import { Secrets } from './secrets'
@@ -163,7 +165,11 @@ void app.whenReady().then(() => {
 
   const sendSpend = (summary: Record<Provider, SpendSummary>): void => sendToWindow('usage:update', summary)
   const chat = new ChatService(store, secrets, (event: ChatEvent) => sendToWindow('chat:event', event), sendSpend)
-  const code = new CodeService(store, secrets, (event: CodeEvent) => sendToWindow('code:event', event), sendSpend)
+  // The official coding CLIs (Claude Code, Codex) that a session can run on, and the
+  // channel through which Claude Code asks before it edits a file or runs a command.
+  const cli = new CliManager((event: CliEvent) => sendToWindow('cli:event', event), { offline: DEMO })
+  const bridge = new PermissionBridge(app.getPath('userData'))
+  const code = new CodeService(store, secrets, (event: CodeEvent) => sendToWindow('code:event', event), sendSpend, { cli, bridge })
 
   protocol.handle('threefold', (request) => {
     const url = new URL(request.url)
@@ -195,7 +201,7 @@ void app.whenReady().then(() => {
   // The app never needs camera, microphone, location or notifications.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
 
-  registerIpc({ store, secrets, chat, code, artifacts, window: () => mainWindow })
+  registerIpc({ store, secrets, chat, code, cli, artifacts, window: () => mainWindow })
   buildMenu()
   createWindow()
 
@@ -205,6 +211,8 @@ void app.whenReady().then(() => {
   app.on('before-quit', () => {
     chat.stopAll()
     code.stopAll()
+    cli.cancelAll()
+    bridge.stop()
   })
 })
 

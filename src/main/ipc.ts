@@ -4,9 +4,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, app, clipboard, dialog, ipcMain, shell } from 'electron'
-import { isProvider } from '@shared/types'
+import { isCliProvider, isProvider } from '@shared/types'
 import type {
   Attachment,
+  CliProvider,
   Conversation,
   ModelOption,
   ModelRef,
@@ -19,6 +20,7 @@ import type {
 import { MODELS } from '@shared/pricing'
 import { parseHandoff } from '@shared/handoff'
 import { ChatService, DEMO } from './chat'
+import type { CliManager } from './code/cli'
 import { CodeService } from './code/service'
 import { importExport } from './importService'
 import { claudeErrorMessage, verifyClaudeKey } from './providers/anthropic'
@@ -32,6 +34,7 @@ export interface IpcDeps {
   secrets: Secrets
   chat: ChatService
   code: CodeService
+  cli: CliManager
   artifacts: Map<string, string>
   window: () => BrowserWindow | null
 }
@@ -67,7 +70,7 @@ function cleanReviewers(value: unknown): ModelRef[] {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { store, secrets, chat, code, artifacts } = deps
+  const { store, secrets, chat, code, cli, artifacts } = deps
   const modelsCache = path.join(store.dir, 'available-models.json')
 
   const readAvailable = (): Partial<Record<Provider, string[]>> => {
@@ -338,6 +341,19 @@ export function registerIpc(deps: IpcDeps): void {
     const options = { defaultPath: path.basename(String(name)) }
     const result = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options)
     if (!result.canceled && result.filePath) fs.writeFileSync(result.filePath, String(content))
+  })
+
+  // ---------- the official coding CLIs ----------
+
+  const notCli = { ok: false, error: 'Only Claude mode and ChatGPT mode have a coding CLI.' }
+  handle('cli:status', (provider: CliProvider) => (isCliProvider(provider) ? cli.status(provider) : null))
+  handle('cli:install', (provider: CliProvider) => (isCliProvider(provider) ? cli.install(provider) : notCli))
+  handle('cli:login', (provider: CliProvider) => (isCliProvider(provider) ? cli.login(provider) : notCli))
+  handle('cli:loginInput', (provider: CliProvider, text: string) => {
+    if (isCliProvider(provider)) cli.loginInput(provider, String(text ?? '').slice(0, 2000))
+  })
+  handle('cli:cancel', (provider: CliProvider) => {
+    if (isCliProvider(provider)) cli.cancel(provider)
   })
 
   // ---------- code ----------

@@ -209,6 +209,8 @@ export interface Settings {
   /** Reviewers last chosen in the Threefold tab. */
   reviewers: ModelRef[]
   fallback: FallbackSettings
+  /** Code tab: run new sessions through the official CLI on the user's subscription first. */
+  subscription: Record<CliProvider, boolean>
 }
 
 export type KeyStatus = Record<Provider, boolean>
@@ -286,6 +288,47 @@ export interface SendRequest {
 
 // ---------- Code tab ----------
 
+/** Providers whose official coding CLI can run on a subscription plan. */
+export type CliProvider = 'claude' | 'chatgpt'
+export const CLI_PROVIDERS: CliProvider[] = ['claude', 'chatgpt']
+
+export function isCliProvider(value: unknown): value is CliProvider {
+  return value === 'claude' || value === 'chatgpt'
+}
+
+/** What Threefold knows about a coding CLI on this computer. */
+export interface CliStatus {
+  provider: CliProvider
+  /** The tool's own name: "Claude Code" or "Codex". */
+  name: string
+  installed: boolean
+  path?: string
+  version?: string
+  /** Newest published version, when it could be looked up. */
+  latest?: string
+  /** Installed, but older than the newest release. */
+  outdated: boolean
+  /** Installed, but too old for Threefold to drive. */
+  unsupported: boolean
+  /** How it was installed, which decides how it is updated. */
+  manager: 'homebrew' | 'npm' | 'native' | 'unknown'
+  /** subscription: signed in with a plan. api: signed in with an API account. none: not signed in. */
+  account: 'subscription' | 'api' | 'none'
+  /** The plan's name, when the CLI reports it ("Max"). */
+  plan?: string
+  /** The exact command that installing or updating would run, or null when Threefold cannot do it. */
+  installCommand: string | null
+  /** Until when the plan's usage limit is known to be reached (epoch ms). */
+  limitedUntil?: number
+  /** Why the check itself failed, if it did. */
+  error?: string
+}
+
+/** Progress of an install, update or sign-in that Threefold started. */
+export type CliEvent =
+  | { type: 'output'; provider: CliProvider; task: 'install' | 'login'; text: string }
+  | { type: 'done'; provider: CliProvider; task: 'install' | 'login'; ok: boolean; error?: string }
+
 export type CodeItem =
   | { id: string; type: 'user'; text: string }
   | { id: string; type: 'text'; text: string }
@@ -310,10 +353,19 @@ export interface CodeSessionMeta {
   createdAt: number
   updatedAt: number
   costUsd: number
+  engine?: 'cli'
 }
 
 export interface CodeSession extends CodeSessionMeta {
   items: CodeItem[]
+  /**
+   * cli: this session runs through the official CLI (Claude Code or Codex), on the
+   * user's subscription first and on their API key when the plan's limit is reached.
+   * Absent: Threefold's API-key agent.
+   */
+  engine?: 'cli'
+  /** Claude Code session id or Codex thread id, used to continue the same conversation. */
+  cliSessionId?: string
   /** Claude Agent SDK session id, used to resume. */
   agentSessionId?: string
   /** ChatGPT mode: provider-native input items kept for the next prompt. */
@@ -438,6 +490,18 @@ export interface ThreefoldApi {
   artifacts: {
     register(html: string): Promise<string>
     save(name: string, content: string): Promise<void>
+  }
+  cli: {
+    /** Looks for the CLI, its version, the newest version and whether it is signed in. */
+    status(provider: CliProvider): Promise<CliStatus>
+    /** Installs the CLI, or updates it when it is already there. Output arrives as events. */
+    install(provider: CliProvider): Promise<{ ok: boolean; error?: string }>
+    /** Starts the CLI's own sign-in, which opens the maker's page in the browser. */
+    login(provider: CliProvider): Promise<{ ok: boolean; error?: string }>
+    /** Sends a line to a sign-in that is waiting for one (a code shown by the browser). */
+    loginInput(provider: CliProvider, text: string): Promise<void>
+    cancel(provider: CliProvider): Promise<void>
+    onEvent(listener: (event: CliEvent) => void): () => void
   }
   code: {
     list(): Promise<CodeSessionMeta[]>

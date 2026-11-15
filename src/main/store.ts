@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
   displayName: '',
   reviewers: [],
   fallback: { ...DEFAULT_FALLBACK },
+  subscription: { claude: false, chatgpt: false },
 }
 
 const IMAGE_EXT: Record<string, string> = {
@@ -125,6 +126,7 @@ export function codeMetaOf(session: CodeSession): CodeSessionMeta {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     costUsd: session.costUsd,
+    engine: session.engine,
   }
 }
 
@@ -158,6 +160,7 @@ export class Store {
     if (!isProvider(this.settings.lastProvider)) this.settings.lastProvider = 'claude'
     if (!Array.isArray(this.settings.reviewers)) this.settings.reviewers = []
     this.settings.fallback = cleanFallback(saved.fallback)
+    this.settings.subscription = { claude: saved.subscription?.claude === true, chatgpt: saved.subscription?.chatgpt === true }
     this.loadIndex()
   }
 
@@ -182,6 +185,10 @@ export class Store {
         gemini: { ...this.settings.credits.gemini, ...patch.credits?.gemini },
       },
       fallback: cleanFallback({ ...this.settings.fallback, ...patch.fallback }),
+      subscription: {
+        claude: (patch.subscription?.claude ?? this.settings.subscription.claude) === true,
+        chatgpt: (patch.subscription?.chatgpt ?? this.settings.subscription.chatgpt) === true,
+      },
     }
     writeJson(this.file('settings.json'), this.settings)
     return this.settings
