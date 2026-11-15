@@ -44,13 +44,25 @@ Rules for the mark:
 | Ember | `#C2571A` | The left sheet. Brand accent, live cost indicators, the credit meter |
 | Ink | `#1F2430` | The middle sheet. Wordmark, toasts |
 | Tide | `#3B63D9` | The right sheet. Gemini mode accent |
-| Paper | `#F7F4EC` | Icon background, Claude mode canvas |
+| Paper | `#F7F4EC` | Icon background, Claude mode canvas. Not a background for the website |
 | Warm fold | `#F2C9A8` | The Ember and Ink overlap |
 | Cool fold | `#C9D6F7` | The Ink and Tide overlap |
 
 Ember always means "money is being spent right now": the pulsing dot, the live cost figure, the meter bar, the billing notice in the Threefold review tab. Do not use it for decoration elsewhere in the interface.
 
 In lists of models, a small dot shows which provider bills for it: Ember for Claude, Ink for ChatGPT, Tide for Gemini.
+
+### The website
+
+The website (`docs/`) shows Threefold's own colours, not any one mode's.
+
+- **White canvas.** Not Paper, which is the canvas of Claude mode inside the app.
+- **Three primaries, used together:** Ember, Ink and Tide. The headline's three lines take them in the order of the sheets, a bar of the three runs across the top of the page, and the same three name the providers on cards and dots. Buttons and the selected tab are Ink. Links are Tide.
+- **Two secondaries, as tints:** Warm fold and Cool fold colour alternate sections, lightened, and sit behind the headline as two soft sheets. Each tinted section leans on the sheet next to its fold for bullets, numbers and notes: Ember on warm, Tide on cool.
+- **The closing section is a band of Ink.**
+- **Sans-serif headings.** The serif belongs to Claude mode in the app.
+
+A page built on Paper with a serif and Ember alone reads as another company's product. The mark has five colours; the website uses all five.
 
 ### Mode palettes
 

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Threefold — Claude, ChatGPT and Gemini in one local app, on your own API credits</title>
   <meta name="description" content="Threefold is a local Mac app with a Claude mode, a ChatGPT mode and a Gemini mode. It runs on your own API keys, spends the API credits your plans already include, and shows what every message costs while it is written.">
-  <meta name="theme-color" content="#f7f4ec" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1c1b19" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14171f" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Threefold — three assistants, one local app, your own API credits">
   <meta property="og:description" content="A local Mac app for Claude, ChatGPT and Gemini that runs on your API keys and shows every message's cost live.">
@@ -45,7 +45,7 @@
   <main id="main">
     <section class="hero">
       <p class="eyebrow">A local app for macOS</p>
-      <h1>Three assistants.<br>One local app.<br><span class="accent">Your own API credits.</span></h1>
+      <h1><span class="c-ember">Three assistants.</span><br><span class="c-ink">One local app.</span><br><span class="c-tide">Your own API credits.</span></h1>
       <p class="lede">
         Paid Claude, ChatGPT and Google AI plans now come with monthly API credits that their own apps cannot spend.
         Threefold gives those credits somewhere to go: a Claude mode, a ChatGPT mode and a Gemini mode on your Mac,
@@ -59,22 +59,22 @@
 
       <div class="showcase" data-showcase>
         <div class="tabs" role="tablist" aria-label="Screens">
-          <button role="tab" aria-selected="true" data-shot="claude-reply" data-alt="Claude mode: a reply on a warm paper background, with its cost and token counts under it and a monthly credit meter in the sidebar">Claude mode</button>
+          <button role="tab" aria-selected="true" data-shot="threefold-done" data-alt="Threefold review: an answer with its draft, two reviews and final step listed above it, each with its own cost">Threefold review</button>
+          <button role="tab" aria-selected="false" data-shot="claude-reply" data-alt="Claude mode: a reply on a warm paper background, with its cost and token counts under it and a monthly credit meter in the sidebar">Claude mode</button>
           <button role="tab" aria-selected="false" data-shot="chatgpt-reply" data-alt="ChatGPT mode: the same layout in a neutral white theme with the model picker in the top bar">ChatGPT mode</button>
           <button role="tab" aria-selected="false" data-shot="gemini-reply" data-alt="Gemini mode: a cool blue-tinted theme with the Gemini spend meter in the sidebar">Gemini mode</button>
-          <button role="tab" aria-selected="false" data-shot="threefold-done" data-alt="Threefold review: an answer with its draft, two reviews and final step listed above it, each with its own cost">Threefold review</button>
           <button role="tab" aria-selected="false" data-shot="research" data-alt="Deep research: a message tagged as deep research, answered with a structured report, its sources and its cost">Deep research</button>
           <button role="tab" aria-selected="false" data-shot="fallback" data-alt="Automatic fallback: a chat that moved from Claude to ChatGPT, with a card at the top saying why, what the handoff summary cost, and the summary itself">Fallback</button>
         </div>
         <figure class="window">
           <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-          <img id="shot" src="screenshots/claude-reply.png" width="1280" height="840" alt="Claude mode: a reply on a warm paper background, with its cost and token counts under it and a monthly credit meter in the sidebar">
+          <img id="shot" src="screenshots/threefold-done.png" width="1280" height="840" alt="Threefold review: an answer with its draft, two reviews and final step listed above it, each with its own cost">
         </figure>
         <p class="caption">Screens from demo mode, which is why the replies describe themselves as canned.</p>
       </div>
     </section>
 
-    <section class="band" aria-labelledby="credits-title">
+    <section class="band warm" aria-labelledby="credits-title">
       <h2 id="credits-title">The credits your plan already includes</h2>
       <p class="section-lede">Each company adds API credit to its paid plans. None of them lets you spend it in its own app.</p>
       <div class="credit-grid">
@@ -144,7 +144,7 @@
       <p class="fineprint">Not included: voice, video generation, the official apps' connectors, and syncing chats back to the official apps.</p>
     </section>
 
-    <section id="review" class="band" aria-labelledby="review-title">
+    <section id="review" class="band cool" aria-labelledby="review-title">
       <h2 id="review-title">Threefold review: one question, a checked answer</h2>
       <p class="section-lede">Connect two or more providers and a fourth tab turns on. You choose who answers and who reviews, from every provider you have a key for. Every message then takes three steps.</p>
       <ol class="steps">
@@ -224,7 +224,7 @@
       </div>
     </section>
 
-    <section id="cost" class="band" aria-labelledby="cost-title">
+    <section id="cost" class="band warm" aria-labelledby="cost-title">
       <h2 id="cost-title">The cost is on screen while it happens</h2>
       <div class="split reverse">
         <div>
@@ -273,7 +273,7 @@
       </div>
     </section>
 
-    <section id="code" class="band" aria-labelledby="code-title">
+    <section id="code" class="band cool" aria-labelledby="code-title">
       <h2 id="code-title">Code on your subscription first, your API key after</h2>
       <p class="section-lede">
         A Claude or ChatGPT plan already covers coding in its maker's own command-line tool. Threefold's Code tab can
@@ -417,7 +417,7 @@
       </p>
     </section>
 
-    <section id="setup" class="band" aria-labelledby="setup-title">
+    <section id="setup" class="band warm" aria-labelledby="setup-title">
       <h2 id="setup-title">Setup is three steps per provider</h2>
       <p class="section-lede">A short wizard walks you through it on first launch. Connect one, two or all three.</p>
       <ol class="setup">
@@ -496,7 +496,7 @@
       </p>
     </section>
 
-    <section id="handoff" class="band" aria-labelledby="handoff-title">
+    <section id="handoff" class="band cool" aria-labelledby="handoff-title">
       <h2 id="handoff-title">Or bring one chat over in a minute, with the threefolds skill</h2>
       <p class="section-lede">
         An export takes a while and brings everything. When you only want to carry on with one conversation, ask the

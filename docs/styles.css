@@ -1,40 +1,64 @@
-/* Threefold site. Colours follow the brand guide: Ember, Ink, Tide on Paper. */
+/*
+ * Threefold site. The colours are the five in the mark, on white:
+ * Ember, Ink and Tide (the three sheets) and the two lighter tones where the
+ * sheets overlap, Warm fold and Cool fold, which tint alternate sections.
+ */
 
 :root {
+  /* The three sheets. */
   --ember: #c2571a;
   --ink: #1f2430;
   --tide: #3b63d9;
+  /* The two overlaps. */
+  --warm-fold: #f2c9a8;
+  --cool-fold: #c9d6f7;
+  /* Ink that stays dark in both themes, for the dark band and dark buttons. */
+  --ink-fixed: #1f2430;
 
-  --bg: #f7f4ec;
-  --band: #efebdf;
+  --bg: #ffffff;
+  --band: #f4f5f8;
+  --band-warm: color-mix(in srgb, var(--warm-fold) 30%, #ffffff);
+  --band-cool: color-mix(in srgb, var(--cool-fold) 38%, #ffffff);
   --surface: #ffffff;
-  --text: #24231f;
-  --text-2: #5f5b52;
-  --text-3: #8b867a;
-  --border: #ded8c8;
-  --accent: #b4541a;
-  --shadow: 0 1px 2px rgba(60, 48, 24, 0.06), 0 18px 50px rgba(60, 48, 24, 0.14);
+  --text: #1f2430;
+  --text-2: #4c5366;
+  --text-3: #7a8294;
+  --border: #dde1ea;
+  --link: #3359cf;
+  --button: #1f2430;
+  --button-text: #ffffff;
+  --shadow: 0 1px 2px rgba(31, 36, 48, 0.06), 0 18px 50px rgba(31, 36, 48, 0.14);
+  /* The colour a section leans on for its bullets, numbers and notes. */
+  --mark: var(--ink);
 
-  --serif: ui-serif, 'New York', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --width: 1080px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1b19;
-    --band: #232220;
-    --surface: #2b2a27;
-    --text: #edeae2;
-    --text-2: #b0ab9f;
-    --text-3: #807b70;
-    --border: #3a3834;
-    --accent: #e08a4f;
+    /* The mark's own colours for dark backgrounds. */
     --ember: #e08a4f;
-    --ink: #ddd9cf;
+    --ink: #ede9df;
     --tide: #8fabf5;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 50px rgba(0, 0, 0, 0.45);
+    --warm-fold: #8a4a22;
+    --cool-fold: #3f5488;
+
+    --bg: #14171f;
+    --band: #1a1e28;
+    --band-warm: color-mix(in srgb, var(--warm-fold) 22%, #14171f);
+    --band-cool: color-mix(in srgb, var(--cool-fold) 30%, #14171f);
+    --surface: #1f2430;
+    --text: #eef0f5;
+    --text-2: #b4bbcc;
+    --text-3: #818a9d;
+    --border: #2f3546;
+    --link: #8fabf5;
+    --button: #eef0f5;
+    --button-text: #14171f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 18px 50px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -61,13 +85,21 @@ img {
   display: block;
 }
 
+/* Three blocks in the three colours of the mark, across the very top of the page. */
+body::before {
+  content: '';
+  display: block;
+  height: 5px;
+  background: linear-gradient(90deg, var(--ember) 0 33.34%, var(--ink) 33.34% 66.67%, var(--tide) 66.67% 100%);
+}
+
 a {
-  color: var(--accent);
+  color: var(--link);
   text-underline-offset: 3px;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--tide);
   outline-offset: 3px;
   border-radius: 6px;
 }
@@ -96,12 +128,13 @@ h3 {
 }
 
 h1 {
-  font: 500 clamp(40px, 7vw, 72px) / 1.05 var(--serif);
-  letter-spacing: -0.025em;
+  font: 760 clamp(40px, 7.2vw, 76px) / 1.03 var(--display);
+  letter-spacing: -0.04em;
 }
 
 h2 {
-  font: 500 clamp(28px, 4vw, 40px) / 1.15 var(--serif);
+  font: 720 clamp(28px, 4vw, 40px) / 1.12 var(--display);
+  letter-spacing: -0.03em;
 }
 
 h3 {
@@ -157,12 +190,12 @@ p {
 }
 
 .status-pill {
-  padding: 3px 11px;
+  padding: 4px 12px;
   border-radius: 20px;
-  border: 1px solid var(--border);
+  background: var(--band-cool);
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-2);
+  font-weight: 650;
+  color: var(--link);
   white-space: nowrap;
 }
 
@@ -174,8 +207,15 @@ section {
   scroll-margin-top: 56px;
 }
 
-.band {
-  background: var(--band);
+/* Tinted sections take the two overlap colours in turn, and lean on the sheet next to it. */
+.band.warm {
+  background: var(--band-warm);
+  --mark: var(--ember);
+}
+
+.band.cool {
+  background: var(--band-cool);
+  --mark: var(--tide);
 }
 
 .section-lede {
@@ -198,8 +238,8 @@ section {
 .note {
   margin-top: 22px;
   padding: 14px 18px;
-  border-left: 3px solid var(--ember);
-  background: color-mix(in srgb, var(--ember) 7%, transparent);
+  border-left: 3px solid var(--mark);
+  background: color-mix(in srgb, var(--mark) 7%, var(--surface));
   border-radius: 0 10px 10px 0;
   font-size: 15.5px;
   color: var(--text-2);
@@ -208,21 +248,58 @@ section {
 /* ---------- hero ---------- */
 
 .hero {
-  padding-top: 72px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-top: 76px;
   text-align: center;
 }
 
-.eyebrow {
-  margin-bottom: 18px;
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+/* Two sheets from the mark, in its overlap colours, behind the headline. */
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -150px;
+  width: clamp(280px, 40vw, 520px);
+  aspect-ratio: 1;
+  border-radius: 26%;
 }
 
-.accent {
-  color: var(--accent);
+.hero::before {
+  left: calc(50% - clamp(420px, 58vw, 800px));
+  background: var(--warm-fold);
+  opacity: 0.5;
+}
+
+.hero::after {
+  right: calc(50% - clamp(420px, 58vw, 800px));
+  top: -90px;
+  background: var(--cool-fold);
+  opacity: 0.55;
+}
+
+.eyebrow {
+  margin-bottom: 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* The headline's three lines take the mark's three colours, in the order of its sheets. */
+.c-ember {
+  color: var(--ember);
+}
+
+.c-ink {
+  color: var(--ink);
+}
+
+.c-tide {
+  color: var(--tide);
 }
 
 .lede {
@@ -260,15 +337,9 @@ section {
 }
 
 .button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-@media (prefers-color-scheme: dark) {
-  .button.primary {
-    color: #20160e;
-  }
+  background: var(--button);
+  border-color: var(--button);
+  color: var(--button-text);
 }
 
 .showcase {
@@ -298,9 +369,8 @@ section {
 }
 
 .tabs button[aria-selected='true'] {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  background: var(--button);
+  color: var(--button-text);
 }
 
 .window {
@@ -448,7 +518,7 @@ section {
   width: 9px;
   height: 9px;
   border-radius: 3px;
-  background: var(--ember);
+  background: var(--mark);
 }
 
 .features strong,
@@ -486,8 +556,8 @@ section {
   height: 34px;
   margin-bottom: 14px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--ember) 14%, transparent);
-  color: var(--ember);
+  background: color-mix(in srgb, var(--mark) 14%, transparent);
+  color: var(--mark);
   font-weight: 700;
 }
 
@@ -532,7 +602,8 @@ section {
 }
 
 .honest h3 {
-  font: 500 26px/1.2 var(--serif);
+  font: 700 24px/1.2 var(--display);
+  letter-spacing: -0.02em;
   margin-bottom: 14px;
 }
 
@@ -608,7 +679,7 @@ section {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--link);
 }
 
 .path-meta {
@@ -816,9 +887,15 @@ pre.cmd code {
 
 /* ---------- status and footer ---------- */
 
+/* The closing section is a band of Ink, the mark's third colour. */
 .status {
   text-align: center;
-  background: var(--band);
+  background: var(--ink-fixed);
+  --text: #ffffff;
+  --text-2: #c6ccdb;
+  --border: #3d4458;
+  --surface: transparent;
+  color: var(--text);
 }
 
 .status p {
@@ -829,6 +906,22 @@ pre.cmd code {
 
 .status strong {
   color: var(--text);
+}
+
+.status .button {
+  color: #ffffff;
+}
+
+.status .button.primary {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: var(--ink-fixed);
+}
+
+@media (prefers-color-scheme: dark) {
+  .status {
+    background: #1f2430;
+  }
 }
 
 footer {
