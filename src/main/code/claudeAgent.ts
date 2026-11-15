@@ -2,6 +2,7 @@
 // library). It runs with the user's API key, so the work is billed to the API
 // organization that holds their monthly credits, not to their Claude plan.
 
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { query } from '@anthropic-ai/claude-agent-sdk'
@@ -22,21 +23,46 @@ function bundledExecutable(): string | undefined {
   }
 }
 
-export function summarize(tool: string, input: Record<string, unknown>): { summary: string; detail: string } {
+/**
+ * The project folder as the agent may name it. On macOS a folder can have two
+ * spellings (/var/… and /private/var/…), and the agent reports the second.
+ */
+export function projectRoots(cwd: string): string[] {
+  try {
+    const real = fs.realpathSync(cwd)
+    return real === cwd ? [cwd] : [cwd, real]
+  } catch {
+    return [cwd]
+  }
+}
+
+/** A file the way it sits in the project: its path inside the project folder, when it is in there. */
+export function inside(file: string, roots: string[]): string {
+  for (const root of roots) {
+    const base = root.replace(/\/+$/, '')
+    if (file === base) return '.'
+    if (file.startsWith(`${base}/`)) return file.slice(base.length + 1)
+  }
+  return file
+}
+
+/** @param roots the project folder (see projectRoots), so files in it are shown by their path inside it */
+export function summarize(tool: string, input: Record<string, unknown>, roots: string[] = []): { summary: string; detail: string } {
   const text = (key: string): string => (typeof input[key] === 'string' ? (input[key] as string) : '')
+  const file = (key: string): string => inside(text(key), roots)
   switch (tool) {
     case 'Bash':
       return { summary: `Run: ${text('command').split('\n')[0]!.slice(0, 120)}`, detail: text('command') }
     case 'Write':
-      return { summary: `Write ${text('file_path')}`, detail: text('content').slice(0, 6000) }
+      return { summary: `Write ${file('file_path')}`, detail: text('content').slice(0, 6000) }
     case 'Edit':
     case 'MultiEdit':
       return {
-        summary: `Edit ${text('file_path')}`,
+        summary: `Edit ${file('file_path')}`,
         detail: text('old_string') ? `- ${text('old_string')}\n+ ${text('new_string')}`.slice(0, 6000) : JSON.stringify(input, null, 2).slice(0, 6000),
       }
     case 'Read':
-      return { summary: `Read ${text('file_path')}`, detail: '' }
+      return { summary: `Read ${file('file_path')}`, detail: '' }
     case 'Glob':
       return { summary: `Find files: ${text('pattern')}`, detail: '' }
     case 'Grep':
@@ -70,6 +96,7 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
     delete env[name]
   }
 
+  const roots = projectRoots(ctx.session.cwd)
   let costUsd = 0
   let inputTokens = 0
   let outputTokens = 0
@@ -107,7 +134,7 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
         ...(ctx.session.agentSessionId ? { resume: ctx.session.agentSessionId } : {}),
         ...(bundledExecutable() ? { pathToClaudeCodeExecutable: bundledExecutable() } : {}),
         canUseTool: async (toolName, input) => {
-          const { summary, detail } = summarize(toolName, input)
+          const { summary, detail } = summarize(toolName, input, roots)
           const allowed = await ctx.ask(toolName, summary, detail)
           return allowed
             ? { behavior: 'allow', updatedInput: input }
@@ -155,7 +182,7 @@ export async function runClaudeAgent(ctx: AgentContext): Promise<AgentResult> {
       if (message.type === 'assistant') {
         for (const block of message.message.content) {
           if (block.type !== 'tool_use') continue
-          const { summary, detail } = summarize(block.name, (block.input ?? {}) as Record<string, unknown>)
+          const { summary, detail } = summarize(block.name, (block.input ?? {}) as Record<string, unknown>, roots)
           toolNames.set(block.id, { name: block.name, summary, input: detail })
           ctx.emit.item({ id: block.id, type: 'tool', name: block.name, summary, input: detail || undefined, status: 'running' })
         }

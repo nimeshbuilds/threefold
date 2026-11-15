@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { tokenCost } from '@shared/pricing'
-import { resultText, summarize } from './claudeAgent'
+import { projectRoots, resultText, summarize } from './claudeAgent'
 import {
   LIMIT_TEXT,
   SIGNED_OUT_TEXT,
@@ -72,8 +72,9 @@ export async function runClaudeCli(
   const onAbort = (): void => controller.abort()
   ctx.signal.addEventListener('abort', onAbort, { once: true })
 
+  const roots = projectRoots(ctx.session.cwd)
   const bridge = await deps.bridge.open((tool, input) => {
-    const { summary, detail } = summarize(tool, input)
+    const { summary, detail } = summarize(tool, input, roots)
     return ctx.ask(tool, summary, detail)
   })
 
@@ -171,7 +172,7 @@ export async function runClaudeCli(
       if (message.error === 'authentication_failed') signedOut(said || 'Claude Code is not signed in.')
       for (const block of Array.isArray(inner.content) ? inner.content : []) {
         if (!isRecord(block) || block.type !== 'tool_use' || typeof block.id !== 'string' || typeof block.name !== 'string') continue
-        const { summary, detail } = summarize(block.name, isRecord(block.input) ? block.input : {})
+        const { summary, detail } = summarize(block.name, isRecord(block.input) ? block.input : {}, roots)
         tools.set(block.id, { name: block.name, summary, input: detail })
         ctx.emit.item({ id: block.id, type: 'tool', name: block.name, summary, input: detail || undefined, status: 'running' })
       }

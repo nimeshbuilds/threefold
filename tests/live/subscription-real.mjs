@@ -138,14 +138,19 @@ try {
   }
   await page.waitForSelector('.onboarding', { state: 'detached', timeout: 10000 })
 
-  await page.click('.mode-switch button:has-text("Claude")')
-  await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
-  if (await setUp('claude')) await runOnce('claude', 'Ran on your Claude plan')
-
-  await page.click('.side-btn:has-text("New chat")')
-  await page.click('.mode-switch button:has-text("ChatGPT")')
-  await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt')
-  if (await setUp('codex')) await runOnce('codex', 'Ran on your ChatGPT plan')
+  // REAL_ONLY=claude or REAL_ONLY=codex checks just that one.
+  const only = process.env.REAL_ONLY
+  if (only !== 'codex') {
+    await page.click('.mode-switch button:has-text("Claude")')
+    await page.waitForFunction(() => document.documentElement.dataset.mode === 'claude')
+    if (await setUp('claude')) await runOnce('claude', 'Ran on your Claude plan')
+  }
+  if (only !== 'claude') {
+    await page.click('.side-btn:has-text("New chat")')
+    await page.click('.mode-switch button:has-text("ChatGPT")')
+    await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt')
+    if (await setUp('codex')) await runOnce('codex', 'Ran on your ChatGPT plan')
+  }
 
   const ledger = path.join(dataDir, 'data', 'ledger.jsonl')
   report.ledgerEntries = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').split('\n').filter(Boolean).length : 0

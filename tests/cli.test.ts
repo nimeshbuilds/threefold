@@ -23,6 +23,7 @@ import {
   plainText,
   which,
 } from '../src/main/code/cli'
+import { inside, projectRoots, summarize } from '../src/main/code/claudeAgent'
 import { claudeArgs, claudePermissionMode } from '../src/main/code/claudeCli'
 import { LIMIT_TEXT, SIGNED_OUT_TEXT, parseResetTime, toMillis } from '../src/main/code/cliRun'
 import { CODEX_SANDBOX_NOTE, codexArgs, shownCommand } from '../src/main/code/codexCli'
@@ -131,6 +132,27 @@ describe('reading what the tools say about themselves', () => {
     expect(tokenCost('claude-opus-5-5[1m]', { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10 })).toBe(
       tokenCost('claude-opus-5-5', { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10 }),
     )
+  })
+
+  it('shows a file by its place in the project, not its full path on the disk', () => {
+    const roots = ['/var/folders/x/project', '/private/var/folders/x/project']
+    // The real Claude Code reported the second spelling of the folder.
+    expect(inside('/private/var/folders/x/project/src/notes.txt', roots)).toBe('src/notes.txt')
+    expect(inside('/var/folders/x/project/notes.txt', roots)).toBe('notes.txt')
+    expect(inside('/private/var/folders/x/project', roots)).toBe('.')
+    // A file outside the project keeps its full path, so it is plain that it is outside.
+    expect(inside('/etc/hosts', roots)).toBe('/etc/hosts')
+    expect(inside('/var/folders/x/project-other/a.txt', roots)).toBe('/var/folders/x/project-other/a.txt')
+    expect(summarize('Edit', { file_path: '/private/var/folders/x/project/notes.txt', old_string: 'draft', new_string: 'final' }, roots)).toEqual({
+      summary: 'Edit notes.txt',
+      detail: '- draft\n+ final',
+    })
+    expect(summarize('Read', { file_path: '/etc/hosts' }, roots).summary).toBe('Read /etc/hosts')
+    expect(summarize('Write', { file_path: 'relative.txt', content: 'x' }).summary).toBe('Write relative.txt')
+    const here = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-roots-'))
+    expect(projectRoots(here)).toContain(fs.realpathSync(here))
+    expect(projectRoots('/no/such/folder')).toEqual(['/no/such/folder'])
+    fs.rmSync(here, { recursive: true, force: true })
   })
 
   it('shows the command Codex ran, without the login shell it was wrapped in', () => {

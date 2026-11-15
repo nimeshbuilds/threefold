@@ -12,6 +12,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { tokenCost } from '@shared/pricing'
+import { inside, projectRoots } from './claudeAgent'
 import { LIMIT_TEXT, SIGNED_OUT_TEXT, isRecord, parseResetTime, runLines, type CliRun, type CliRunResult } from './cliRun'
 import type { AgentContext } from './service'
 
@@ -60,6 +61,7 @@ export async function runCodexCli(ctx: AgentContext, run: CliRun, deps: { model?
   }
   // Item ids start again at every run, so they are made unique to this one.
   const runId = randomUUID()
+  const roots = projectRoots(ctx.session.cwd)
   let completed = false
   const plain: string[] = []
 
@@ -103,7 +105,7 @@ export async function runCodexCli(ctx: AgentContext, run: CliRun, deps: { model?
           type: 'tool',
           name: 'Edit',
           summary: `Change ${changes.length === 1 ? names[0] : `${changes.length} files`}`,
-          input: changes.map((change) => `${text(change.kind) || 'update'}  ${text(change.path)}`).join('\n') || undefined,
+          input: changes.map((change) => `${text(change.kind) || 'update'}  ${inside(text(change.path), roots)}`).join('\n') || undefined,
           status: item.status === 'failed' ? 'error' : 'done',
         })
         break
