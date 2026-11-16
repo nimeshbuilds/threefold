@@ -186,6 +186,10 @@ describe('the threefolds skill', () => {
     expect(example).toMatch(INBOX_FILE)
     // The link the skill opens is one the app understands, for each of the three names.
     expect(delivery).toContain('open "threefold://handoff?from=NAME"')
+    // Save first, then open; and a refused open still leaves the handoff where the app finds it.
+    expect(delivery).toMatch(/When the file is saved, and not before, run `open/)
+    expect(delivery).toMatch(/one after the other, never at the same time/)
+    expect(delivery).toMatch(/saved but Threefold could not be opened[^.]*\.?[^.]*it appears as soon as they switch to Threefold/)
     for (const sender of ['claude', 'chatgpt', 'gemini'] as const) {
       expect(delivery).toContain(`\`${sender}\``)
       expect(parseHandoffLink(`threefold://handoff?from=${sender}`)).toEqual({ sender })

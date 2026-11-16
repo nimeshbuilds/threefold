@@ -150,14 +150,30 @@ export function describeIncoming(text: string, source: 'inbox' | 'clipboard', se
   }
 }
 
+/**
+ * How long a link waits for its file. A tool may save the file and open the
+ * link in the same moment, so the link can be a little ahead of the file.
+ */
+export const LATE_FILE_WAIT_MS = { nothingElse: 2500, clipboardHasOne: 700 }
+/**
+ * How long after a file was picked up without a link a link may still name its
+ * sender. Coming back to the app can find the file a moment before its link arrives.
+ */
+export const LATE_LINK_MS = 5000
+
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 export class IncomingHandoffs {
   private pending: IncomingHandoff | null = null
+  /** The last file taken from the inbox with no link to say who sent it. */
+  private unnamed: { item: IncomingHandoff; at: number } | null = null
 
   constructor(
     private readonly dir: string,
     private readonly readClipboard: () => string | Promise<string>,
     /** Tells the window that something is waiting. */
     private readonly signal: () => void,
+    private readonly wait = LATE_FILE_WAIT_MS,
   ) {
     ensureInbox(dir)
   }
@@ -169,10 +185,44 @@ export class IncomingHandoffs {
   async open(url: string): Promise<boolean> {
     const link = parseHandoffLink(url)
     if (!link) return false
-    this.pending =
-      this.fromInbox(link.sender) ?? (await this.fromClipboard(link.sender)) ?? { source: 'none', sender: link.sender, summary: '' }
+    let found = this.fromInbox(link.sender)
+    if (!found && link.sender && this.unnamed && Date.now() - this.unnamed.at <= LATE_LINK_MS) {
+      // The file this link belongs to was found a moment ago. It is shown again, now with its sender.
+      found = { ...this.unnamed.item, sender: link.sender }
+    }
+    this.unnamed = null
+    if (!found) {
+      const copied = await this.fromClipboard(link.sender)
+      // A file always wins over the clipboard, so it is given a moment to turn up.
+      found = (await this.lateFile(link.sender, copied ? this.wait.clipboardHasOne : this.wait.nothingElse)) ?? copied
+    }
+    this.pending = found ?? { source: 'none', sender: link.sender, summary: '' }
     this.signal()
     return true
+  }
+
+  /**
+   * Looks in the inbox without a link having asked. The window does this when the
+   * user comes back to the app, so a handoff that a tool saved but could not
+   * announce (a sandbox may refuse to open links) is not left lying there.
+   */
+  checkInbox(): boolean {
+    if (this.pending) return false
+    const found = this.fromInbox()
+    if (!found) return false
+    this.pending = found
+    this.signal()
+    return true
+  }
+
+  private async lateFile(sender: Provider | undefined, waitMs: number): Promise<IncomingHandoff | null> {
+    const until = Date.now() + waitMs
+    while (Date.now() < until) {
+      await pause(Math.min(150, Math.max(1, until - Date.now())))
+      const found = this.fromInbox(sender)
+      if (found) return found
+    }
+    return null
   }
 
   /** What is waiting, handed over once. */
@@ -184,7 +234,9 @@ export class IncomingHandoffs {
 
   private fromInbox(sender?: Provider): IncomingHandoff | null {
     const text = takeFromInbox(this.dir)
-    return text === null ? null : describeIncoming(text, 'inbox', sender)
+    const found = text === null ? null : describeIncoming(text, 'inbox', sender)
+    if (found && !sender) this.unnamed = { item: found, at: Date.now() }
+    return found
   }
 
   private async fromClipboard(sender?: Provider): Promise<IncomingHandoff | null> {

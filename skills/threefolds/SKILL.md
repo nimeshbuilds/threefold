@@ -66,8 +66,8 @@ ls -d /Applications/Threefold.app ~/Applications/Threefold.app 2>/dev/null
 If that prints a path, write the handoff as described above and then ask, after the "end of handoff" line: "Threefold is installed on this Mac. Shall I open it and pass this handoff in?" Then stop and wait. Only if the user says yes:
 
 1. Save the handoff, from its first line to the "end of handoff" line and nothing else, as a new file in the folder `~/Library/Application Support/Threefold/inbox/`. Create the folder if it is missing. Name the file `handoff-`, then the date and time in digits, then `.md`: for example `handoff-20260115-143000.md`.
-2. Run `open "threefold://handoff?from=NAME"`.
-3. Tell the user that Threefold is showing the handoff and is waiting for them to choose where to continue. If a step failed, say which one, and tell them to copy the handoff and paste it into Threefold under File > Continue from a Handoff.
+2. When the file is saved, and not before, run `open "threefold://handoff?from=NAME"`. Do the two steps one after the other, never at the same time. If you work in a sandbox that refuses this command, ask to run it outside the sandbox when your tool lets you ask.
+3. Tell the user that Threefold is showing the handoff and is waiting for them to choose where to continue. If the file was saved but Threefold could not be opened, say so, and tell them that the handoff is waiting for them: it appears as soon as they switch to Threefold. If the file could not be saved, tell them to copy the handoff and paste it into Threefold under File > Continue from a Handoff.
 
 **In every other case** (you cannot run commands, the check printed nothing, or it failed), add one sentence after the "end of handoff" line. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. If you ran the check and it printed nothing, add that Threefold is not installed on this Mac and that you can install it if they ask.
 

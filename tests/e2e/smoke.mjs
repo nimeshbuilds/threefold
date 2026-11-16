@@ -661,23 +661,24 @@ try {
   const savedChats = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8')).length
   const chatsBefore = savedChats()
   const waiting = path.join(inbox, 'handoff-20261115-101500.md')
-  fs.writeFileSync(
-    waiting,
-    '# Threefold handoff\n\n- **Title:** Billing migration\n- **From:** Gemini 3.5 Pro\n\n## Goal\nMove billing to the new schema.\n\n--- end of handoff ---\n',
-  )
+  const billing =
+    '# Threefold handoff\n\n- **Title:** Billing migration\n- **From:** Gemini 3.5 Pro\n\n## Goal\nMove billing to the new schema.\n\n--- end of handoff ---\n'
   // Start somewhere else, so that landing in the sender's mode means something.
   await page.click('.mode-switch button:has-text("Claude")')
   await page.click('.side-btn:has-text("New chat")')
   const addressBefore = page.url()
+  await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), billing)
   await openLink('threefold://artifact/anything')
   await openLink('threefold://file/keys.json')
   await openLink('threefold://settings?from=gemini')
   await openLink('https://example.com/')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(1200)
   check(
-    'links other than the handoff link are ignored, even with a handoff waiting',
-    (await page.locator('.modal').count()) === 0 && fs.existsSync(waiting) && page.url() === addressBefore,
+    'links other than the handoff link are ignored, even with a handoff on the clipboard',
+    (await page.locator('.modal').count()) === 0 && page.url() === addressBefore,
   )
+  await app.evaluate(({ clipboard }) => clipboard.writeText('nothing to see'))
+  fs.writeFileSync(waiting, billing)
 
   await openLink('threefold://handoff?from=gemini&text=this+part+of+a+link+is+ignored')
   await page.waitForSelector('.incoming-modal')
@@ -752,6 +753,23 @@ try {
     /none was waiting/.test((await page.textContent('.toast')) ?? '') && (await page.inputValue('.handoff-input')) === '' && (await page.locator('.incoming-modal').count()) === 0,
   )
   await page.click('.modal-close')
+
+  // ---- a handoff that was saved but never announced (a sandbox may refuse to open links) ----
+  fs.writeFileSync(
+    path.join(inbox, 'handoff-20261116-090000.md'),
+    '# Threefold handoff\n\n- **Title:** Saved, not announced\n- **From:** Codex (GPT-6)\n\n## Goal\nShow up when the user comes back.\n\n--- end of handoff ---\n',
+  )
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('focus'))
+  await page.waitForSelector('.incoming-modal', { timeout: 8000 })
+  const savedText = (await page.textContent('.incoming-modal')) ?? ''
+  check(
+    'a handoff saved without a link is shown when the user comes back to the app',
+    /Saved, not announced/.test(savedText) && /Not stated by the sender · summary written by Codex \(GPT-6\)/.test(savedText),
+    savedText.slice(60, 260),
+  )
+  check('its mode is worked out from who wrote the summary', (await page.textContent('.incoming-pick .seg button.active')) === 'ChatGPT')
+  await page.click('.incoming-modal .btn:has-text("Discard")')
+  await page.waitForSelector('.incoming-modal', { state: 'detached' })
 
   // ---- settings: installing the threefolds skill ----
   await page.click('.user-row')

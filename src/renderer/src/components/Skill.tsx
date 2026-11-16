@@ -50,7 +50,7 @@ const EXAMPLES: Record<Provider, Array<{ run: string; where: string; what: strin
     {
       run: `$${SKILL_NAME} then pass it to Threefold`,
       where: 'Codex',
-      what: 'Write it and pass it straight to Threefold on this Mac. You are asked before anything is opened.',
+      what: 'Write it and save it for Threefold on this Mac, after asking. If Codex’s sandbox will not open the app, the handoff is waiting when you switch to Threefold.',
     },
     { run: `Use the ${SKILL_NAME} skill for this chat.`, where: 'ChatGPT', what: 'Works once the skill is in your workspace.' },
   ],
@@ -262,7 +262,8 @@ export function SkillTab() {
       <ul className="skill-how">
         <li>
           <strong>From a coding tool on this Mac.</strong> The skill checks that Threefold is installed and asks you
-          first. If you say yes, it saves the handoff as a file in Threefold’s inbox folder and opens Threefold.
+          first. If you say yes, it saves the handoff as a file in Threefold’s inbox folder and opens Threefold. If
+          the tool is not allowed to open another app, the handoff is here when you come back to Threefold.
         </li>
         <li>
           <strong>From a chat app in the browser.</strong> The reply ends with a link. Copy the reply, click the link,

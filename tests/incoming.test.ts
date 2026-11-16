@@ -212,7 +212,11 @@ describe('describing what arrived', () => {
 })
 
 describe('receiving a handoff', () => {
-  const setup = (clipboard: string | (() => string) = ''): { incoming: IncomingHandoffs; dir: string; signals: number[]; reads: number[] } => {
+  const NO_WAIT = { nothingElse: 0, clipboardHasOne: 0 }
+  const setup = (
+    clipboard: string | (() => string) = '',
+    wait = NO_WAIT,
+  ): { incoming: IncomingHandoffs; dir: string; signals: number[]; reads: number[] } => {
     const dir = inboxDir(tmp)
     const signals: number[] = []
     const reads: number[] = []
@@ -223,6 +227,7 @@ describe('receiving a handoff', () => {
         return typeof clipboard === 'function' ? clipboard() : clipboard
       },
       () => signals.push(1),
+      wait,
     )
     return { incoming, dir, signals, reads }
   }
@@ -269,6 +274,62 @@ describe('receiving a handoff', () => {
     expect(await incoming.open('threefold://handoff')).toBe(true)
     expect(incoming.take()).toMatchObject({ source: 'none' })
     expect(signals).toHaveLength(1)
+  })
+
+  it('waits a moment for a file that is saved at the same time as the link is opened', async () => {
+    // Seen with a real assistant: it saved the file and opened the link in one go.
+    const { incoming, dir, signals } = setup('', { nothingElse: 1500, clipboardHasOne: 0 })
+    setTimeout(() => fs.writeFileSync(path.join(dir, 'handoff-late.md'), HANDOFF), 200)
+    const started = Date.now()
+    expect(await incoming.open('threefold://handoff?from=claude')).toBe(true)
+    // It stops waiting as soon as the file is there.
+    expect(Date.now() - started).toBeLessThan(1200)
+    expect(signals).toHaveLength(1)
+    expect(incoming.take()).toMatchObject({ source: 'inbox', sender: 'claude', title: 'Migrating the billing tables' })
+  })
+
+  it('prefers a file that turns up late over what is on the clipboard', async () => {
+    const copied = HANDOFF.replace('Migrating the billing tables', 'An older chat')
+    const { incoming, dir } = setup(copied, { nothingElse: 0, clipboardHasOne: 1000 })
+    setTimeout(() => fs.writeFileSync(path.join(dir, 'handoff-late.md'), HANDOFF), 150)
+    await incoming.open('threefold://handoff?from=claude')
+    expect(incoming.take()).toMatchObject({ source: 'inbox', title: 'Migrating the billing tables' })
+
+    // With no file coming, the clipboard is used after the short wait.
+    const alone = setup(copied, { nothingElse: 0, clipboardHasOne: 200 })
+    await alone.incoming.open('threefold://handoff')
+    expect(alone.incoming.take()).toMatchObject({ source: 'clipboard', title: 'An older chat' })
+  })
+
+  it('picks up a saved handoff when the user comes back to the app, with no link at all', () => {
+    // Seen with a real assistant: its sandbox let it save the file but not open the app.
+    const { incoming, dir, signals, reads } = setup(HANDOFF)
+    expect(incoming.checkInbox()).toBe(false)
+    expect(signals).toHaveLength(0)
+    fs.writeFileSync(path.join(dir, 'handoff-saved.md'), HANDOFF)
+    expect(incoming.checkInbox()).toBe(true)
+    expect(signals).toHaveLength(1)
+    // Asked again before the window has taken it: nothing new, and no second signal.
+    expect(incoming.checkInbox()).toBe(false)
+    expect(signals).toHaveLength(1)
+    expect(incoming.take()).toMatchObject({ source: 'inbox', sender: undefined, fromProvider: 'claude' })
+    // Coming back to the app never reads the clipboard.
+    expect(reads).toHaveLength(0)
+  })
+
+  it('lets a link that arrives just after its file was picked up still name the sender', async () => {
+    // Coming back to the app can find the file a moment before the link gets there.
+    const { incoming, dir, signals, reads } = setup('something else')
+    fs.writeFileSync(path.join(dir, 'handoff-first.md'), HANDOFF)
+    expect(incoming.checkInbox()).toBe(true)
+    expect(incoming.take()).toMatchObject({ source: 'inbox', sender: undefined })
+    expect(await incoming.open('threefold://handoff?from=gemini')).toBe(true)
+    expect(incoming.take()).toMatchObject({ source: 'inbox', sender: 'gemini', title: 'Migrating the billing tables' })
+    expect(signals).toHaveLength(2)
+    expect(reads).toHaveLength(0)
+    // Only once: the next link starts from nothing.
+    await incoming.open('threefold://handoff?from=gemini')
+    expect(incoming.take()).toMatchObject({ source: 'none' })
   })
 
   it('finds a handoff that was saved while the link could not be opened, without reading the clipboard', () => {

@@ -47,6 +47,7 @@ function migrateFromPreviousName(): void {
  * has started are kept until it has.
  */
 const earlyLinks: string[] = []
+let onWindowFocus = (): void => {}
 let onLink = (url: string): void => {
   if (earlyLinks.length < 5) earlyLinks.push(url)
 }
@@ -112,6 +113,8 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  // Coming back to the app: a handoff that was saved for it may be waiting.
+  mainWindow.on('focus', () => onWindowFocus())
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -207,6 +210,9 @@ void app.whenReady().then(() => {
     },
   )
   onLink = (url) => void incoming.open(url)
+  // A link that brings the app forward also focuses the window. The link is given a
+  // moment to arrive first, so that it takes the file together with who it says sent it.
+  onWindowFocus = () => void setTimeout(() => incoming.checkInbox(), 1200)
   for (const url of earlyLinks.splice(0)) onLink(url)
   // Makes this copy of the app the one that threefold:// links open. Left alone in
   // development and in tests, where it would point links at a throwaway build.

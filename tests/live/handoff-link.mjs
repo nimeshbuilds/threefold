@@ -52,12 +52,14 @@ try {
   for (let step = 0; step < 6; step++) await page.click('.onboarding-foot .btn.primary')
   await page.waitForSelector('.onboarding', { state: 'detached' })
 
-  fs.writeFileSync(path.join(inbox, 'handoff-20261115-120000.md'), handoff('Sent while running', 'Claude Opus 5.5'))
   // Links that are not the handoff link first: they must do nothing.
+  const address = page.url()
   spawnSync('open', ['-g', '-a', bundle, 'threefold://artifact/anything'])
   spawnSync('open', ['-g', '-a', bundle, 'threefold://file/keys.json'])
-  await sleep(1500)
-  check('other threefold:// links from macOS are ignored', (await page.locator('.modal').count()) === 0 && fs.readdirSync(inbox).length === 1)
+  await sleep(2500)
+  check('other threefold:// links from macOS are ignored', (await page.locator('.modal').count()) === 0 && page.url() === address)
+
+  fs.writeFileSync(path.join(inbox, 'handoff-20261115-120000.md'), handoff('Sent while running', 'Claude Opus 5.5'))
 
   const sent = spawnSync('open', ['-g', '-a', bundle, 'threefold://handoff?from=claude'], { encoding: 'utf8' })
   check('macOS accepts the link for this app', sent.status === 0, sent.stderr.trim())
