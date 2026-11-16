@@ -67,13 +67,17 @@ async function updateItself(name, installed, env, expectVersion) {
   const dataDir = path.join(root, `${name}-profile`)
   const trash = path.join(root, `${name}-trash`)
   const before = versionOf(installed)
+  // The swap puts a different folder at the same place, which shows even when the version number is the same.
+  const folderBefore = fs.statSync(installed).ino
+  let announced = null
   const { app, page } = await open(installed, { THREEFOLD_DATA_DIR: dataDir, THREEFOLD_UPDATE_NO_RELAUNCH: '1', THREEFOLD_UPDATE_TRASH: trash, ...env })
   let closed = false
   app.on('close', () => (closed = true))
   try {
     await page.waitForSelector('.update-pill', { timeout: 30000 })
     const pill = (await page.textContent('.update-pill')) ?? ''
-    check(`${name}: the update button appears by itself`, /Update to \d+\.\d+\.\d+/.test(pill), pill)
+    announced = pill.match(/Update to (\d+\.\d+\.\d+)/)?.[1] ?? null
+    check(`${name}: the update button appears by itself`, announced !== null, pill)
     await page.click('.update-pill')
     await page.waitForSelector('.update-modal')
     await page.screenshot({ path: path.join(shots, `update-${name}-dialog.png`) })
@@ -93,13 +97,15 @@ async function updateItself(name, installed, env, expectVersion) {
     await app.close().catch(() => {})
     return null
   }
-  // The helper swaps once the app has gone.
-  let after = before
-  for (let i = 0; i < 150 && after === before; i++) {
-    await sleep(200)
-    after = versionOf(installed)
-  }
-  check(`${name}: the app in place is now the new version`, after !== before && (!expectVersion || after === expectVersion), `${before} -> ${after}`)
+  // The helper swaps once the app has gone, and writes down how it went.
+  const record = path.join(dataDir, 'updates', 'result.txt')
+  for (let i = 0; i < 150 && !fs.existsSync(record); i++) await sleep(200)
+  const after = versionOf(installed)
+  check(
+    `${name}: the app in place is the new copy, at the version that was announced`,
+    fs.statSync(installed).ino !== folderBefore && after === announced && (!expectVersion || after === expectVersion),
+    `${before} -> ${after}`,
+  )
   check(`${name}: the new copy has an intact seal`, spawnSync('codesign', ['--verify', '--deep', '--strict', installed]).status === 0)
   const retired = fs.existsSync(trash) ? fs.readdirSync(trash) : []
   // The old copy is named after the version the app believed it was, which part 2 overrides.
@@ -109,7 +115,7 @@ async function updateItself(name, installed, env, expectVersion) {
     retired.length === 1 && new RegExp(`^Threefold ${believed.replace(/\./g, '\\.')} \\(replaced \\d{8}-\\d{6}\\)\\.app$`).test(retired[0]) && versionOf(path.join(trash, retired[0])) === before,
     retired.join(', '),
   )
-  check(`${name}: the helper recorded success`, fs.readFileSync(path.join(dataDir, 'updates', 'result.txt'), 'utf8').trim() === 'ok')
+  check(`${name}: the helper recorded success`, fs.readFileSync(record, 'utf8').trim() === 'ok')
   return { dataDir, after }
 }
 
