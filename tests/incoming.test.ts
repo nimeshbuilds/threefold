@@ -15,6 +15,7 @@ import {
   describeIncoming,
   ensureInbox,
   inboxDir,
+  senderFromFileName,
   takeFromInbox,
 } from '../src/main/incoming'
 import { installSkill, isOurSkill, removeSkill, saveSkillZip, skillStatus, skillStatuses, skillZip } from '../src/main/skillInstall'
@@ -301,6 +302,45 @@ describe('receiving a handoff', () => {
     expect(alone.incoming.take()).toMatchObject({ source: 'clipboard', title: 'An older chat' })
   })
 
+  it('reads who a file is from off its name, as a claim, when no link says so', async () => {
+    expect(senderFromFileName('handoff-20261116-101500-chatgpt.md')).toBe('chatgpt')
+    expect(senderFromFileName('handoff-20261116-101500-claude.md')).toBe('claude')
+    expect(senderFromFileName('handoff-20261116-101500-gemini.md')).toBe('gemini')
+    for (const name of ['handoff-20261116-101500.md', 'handoff-20261116-101500-someone.md', 'handoff-claude.txt', 'handoff-20261116-101500-CLAUDE.md']) {
+      expect(senderFromFileName(name)).toBeUndefined()
+    }
+    const { incoming, dir } = setup()
+    fs.writeFileSync(path.join(dir, 'handoff-20261116-101500-chatgpt.md'), HANDOFF)
+    expect(incoming.checkInbox()).toBe(true)
+    // The name says ChatGPT; the summary says Claude wrote it. Both are kept, so the window can show the mismatch.
+    expect(incoming.take()).toMatchObject({ source: 'inbox', sender: 'chatgpt', fromProvider: 'claude' })
+    // A link's word comes first when there is one.
+    fs.writeFileSync(path.join(dir, 'handoff-20261116-101600-chatgpt.md'), HANDOFF)
+    await incoming.open('threefold://handoff?from=gemini')
+    expect(incoming.take()).toMatchObject({ sender: 'gemini' })
+  })
+
+  it('notices a handoff the moment it is saved, with no link and no coming back to the app', async () => {
+    // Seen with a real assistant: its sandbox let it save the file but refused to open the app.
+    const { incoming, dir, signals, reads } = setup(HANDOFF)
+    const stop = incoming.watch(150)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      fs.writeFileSync(path.join(dir, 'handoff-20261116-120000-chatgpt.md'), HANDOFF)
+      for (let i = 0; i < 40 && signals.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(signals).toHaveLength(1)
+      expect(incoming.take()).toMatchObject({ source: 'inbox', sender: 'chatgpt', title: 'Migrating the billing tables' })
+      expect(fs.readdirSync(dir)).toEqual([])
+      // Files that are not handoffs do not set it off.
+      fs.writeFileSync(path.join(dir, 'notes.txt'), 'something else')
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      expect(signals).toHaveLength(1)
+      expect(reads).toHaveLength(0)
+    } finally {
+      stop()
+    }
+  })
+
   it('picks up a saved handoff when the user comes back to the app, with no link at all', () => {
     // Seen with a real assistant: its sandbox let it save the file but not open the app.
     const { incoming, dir, signals, reads } = setup(HANDOFF)
@@ -376,6 +416,19 @@ describe('installing the skill for a coding tool', () => {
     // Other skills in the same folder were never at risk.
     expect(fs.existsSync(path.join(tmp, '.gemini/skills'))).toBe(true)
     expect(removeSkill('gemini-cli', tmp)).toEqual({ ok: true })
+  })
+
+  it('never swaps a newer copy for the older text this app has', () => {
+    // A copy installed straight from GitHub can be ahead of the app.
+    const file = path.join(tmp, '.claude/skills/threefolds/SKILL.md')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    const ahead = `${SKILL_FILE.replace(/<!-- threefolds skill, revision \d+ -->/, '')}\nA later change.\n<!-- threefolds skill, revision 9999 -->\n`
+    fs.writeFileSync(file, ahead)
+    expect(skillStatus('claude-code', tmp).state).toBe('newer')
+    expect(installSkill('claude-code', tmp).ok).toBe(false)
+    expect(fs.readFileSync(file, 'utf8')).toBe(ahead)
+    // It is still Threefold's own skill, so it can be taken out.
+    expect(removeSkill('claude-code', tmp)).toEqual({ ok: true })
   })
 
   it('keeps the folder when something else is in it', () => {

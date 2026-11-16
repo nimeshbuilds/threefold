@@ -20,7 +20,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { HANDOFF_HEADING, parseHandoff, parseHandoffLink, providerFromName } from '@shared/handoff'
-import type { IncomingHandoff, Provider } from '@shared/types'
+import { isProvider, type IncomingHandoff, type Provider } from '@shared/types'
 
 /** handoff-<letters, digits, dots, dashes>.md and nothing else. */
 export const INBOX_FILE = /^handoff-[A-Za-z0-9._-]{1,80}\.md$/
@@ -31,6 +31,16 @@ export const INBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 export function inboxDir(userData: string): string {
   return path.join(userData, 'inbox')
+}
+
+/**
+ * Who a file says it is from: the skill ends the name with -claude, -chatgpt or
+ * -gemini. Like the name in a link, this is a claim. It lets a handoff name its
+ * sender when no link can be opened (a sandbox may refuse to open links).
+ */
+export function senderFromFileName(name: string): Provider | undefined {
+  const tail = name.match(/-([a-z]+)\.md$/)?.[1]
+  return isProvider(tail) ? tail : undefined
 }
 
 const uid = (): number | undefined => (typeof process.getuid === 'function' ? process.getuid() : undefined)
@@ -93,6 +103,11 @@ function readPlainFile(file: string): string | null {
  * was waiting.
  */
 export function takeFromInbox(dir: string, now = Date.now()): string | null {
+  return takeFileFromInbox(dir, now)?.text ?? null
+}
+
+/** The same, with who the file's name says it is from. */
+export function takeFileFromInbox(dir: string, now = Date.now()): { text: string; sender?: Provider } | null {
   if (!trustedDir(dir)) return null
   let names: string[]
   try {
@@ -123,11 +138,11 @@ export function takeFromInbox(dir: string, now = Date.now()): string | null {
   }
   waiting.sort((a, b) => b.modified - a.modified)
 
-  let found: string | null = null
+  let found: { text: string; sender?: Provider } | null = null
   for (const { file } of waiting) {
     if (found === null) {
       const text = readPlainFile(file)
-      if (text !== null && text.toLowerCase().includes(HANDOFF_HEADING.toLowerCase())) found = text
+      if (text !== null && text.toLowerCase().includes(HANDOFF_HEADING.toLowerCase())) found = { text, sender: senderFromFileName(path.basename(file)) }
     }
     remove(file)
   }
@@ -233,10 +248,34 @@ export class IncomingHandoffs {
   }
 
   private fromInbox(sender?: Provider): IncomingHandoff | null {
-    const text = takeFromInbox(this.dir)
-    const found = text === null ? null : describeIncoming(text, 'inbox', sender)
-    if (found && !sender) this.unnamed = { item: found, at: Date.now() }
+    const file = takeFileFromInbox(this.dir)
+    // A link's word on the sender comes first; without a link, the file's own name is used.
+    const found = file === null ? null : describeIncoming(file.text, 'inbox', sender ?? file.sender)
+    if (found && !found.sender) this.unnamed = { item: found, at: Date.now() }
     return found
+  }
+
+  /**
+   * Watches the inbox, so that a handoff appears the moment it is saved, with no
+   * link needed. `onChange` is told after the folder has been quiet for a moment,
+   * which lets a file finish being written. Returns a function that stops watching.
+   */
+  watch(quietMs = 600): () => void {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let watcher: fs.FSWatcher | null = null
+    try {
+      watcher = fs.watch(this.dir, { persistent: false }, () => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => void this.checkInbox(), quietMs)
+      })
+      watcher.on('error', () => watcher?.close())
+    } catch {
+      // Without a watcher, the inbox is still looked at when the user comes back to the app.
+    }
+    return () => {
+      if (timer) clearTimeout(timer)
+      watcher?.close()
+    }
   }
 
   private async fromClipboard(sender?: Provider): Promise<IncomingHandoff | null> {

@@ -14,7 +14,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { SKILL_FILE, SKILL_NAME } from '@shared/handoff'
+import { SKILL_FILE, SKILL_NAME, skillRevision } from '@shared/handoff'
 import { SKILL_TARGETS, type SkillStatus, type SkillTarget } from '@shared/types'
 
 interface TargetSpec {
@@ -71,7 +71,10 @@ export function skillStatus(target: SkillTarget, home = skillHome()): SkillStatu
   else {
     try {
       const text = fs.readFileSync(file, 'utf8')
-      state = same(text, SKILL_FILE) ? 'current' : isOurSkill(text) ? 'outdated' : 'foreign'
+      if (same(text, SKILL_FILE)) state = 'current'
+      else if (!isOurSkill(text)) state = 'foreign'
+      // A copy installed from GitHub can be ahead of this app. It is never swapped for an older text.
+      else state = skillRevision(text) > skillRevision(SKILL_FILE) ? 'newer' : 'outdated'
     } catch {
       state = 'missing'
     }
@@ -91,6 +94,9 @@ export function installSkill(target: SkillTarget, home = skillHome()): { ok: boo
   }
   if (state === 'foreign') {
     return { ok: false, error: `A different skill named ${SKILL_NAME} is already there, so Threefold left it alone.` }
+  }
+  if (state === 'newer') {
+    return { ok: false, error: 'The copy that is installed is newer than the one in this version of Threefold, so it was left as it is.' }
   }
   try {
     fs.mkdirSync(folder, { recursive: true })

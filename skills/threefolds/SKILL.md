@@ -3,13 +3,33 @@ name: threefolds
 description: Writes a handoff summary of the current conversation so it can be continued in another assistant or in the Threefold app without exporting chat history, and can pass it straight into Threefold when that app is installed on this Mac. Use when the user types "threefolds" or "/threefolds", or asks for a handoff summary, or wants to hand off, move, transfer or continue this conversation somewhere else. Also use when the user asks to install, download, set up or update the Threefold app.
 ---
 
-# Writing a Threefold handoff
+# The threefolds skill
+
+This skill hands the current conversation over to another assistant or to the Threefold app. Do its three steps in order. The one exception: when the user asks you to install, download, set up or update the Threefold app, skip the steps and follow "Installing Threefold" at the end.
+
+## Step 1: look for Threefold first
+
+Do this before you write a single word of your reply.
+
+If you have a tool that runs shell commands, run this command now:
+
+```
+uname -s; test -d /Applications/Threefold.app -o -d ~/Applications/Threefold.app && echo threefold-is-installed || echo threefold-is-not-installed
+```
+
+Run it exactly as written, as one command. Read what it prints, and keep the result for step 3:
+
+- **Installed.** It prints `Darwin` and `threefold-is-installed`. You are on the user's Mac, and Threefold is there.
+- **Not installed.** It prints `Darwin` and `threefold-is-not-installed`. You are on the user's Mac, and Threefold is not there.
+- **Unknown.** It prints anything else (for example `Linux`), it fails, you are not allowed to run it, or you have no tool that runs commands. This is the usual result in a chat app, whose commands run on a computer in the cloud and not on the user's Mac.
+
+Never say that Threefold is installed, or that it is not, unless you ran this command yourself in this turn and saw one of the first two results. Do not guess, and never write that you checked when you did not.
+
+## Step 2: write the handoff
 
 Write a handoff summary of this whole conversation, so that a different assistant with no access to it can pick up exactly where it stops. The user will take your summary into another app, such as Threefold, and keep working there.
 
-## What to reply
-
-Reply with the handoff: no greeting and no explanation before it. Do not continue the task and do not ask questions about it. Use exactly the layout below. Keep the first line and the "end of handoff" line as they are, because the receiving app looks for them.
+Your reply starts with the handoff: no greeting and no explanation before it. Do not continue the task and do not ask questions about it. Use exactly the layout below. Keep the first line and the "end of handoff" line as they are, because the receiving app looks for them.
 
 ```
 # Threefold handoff
@@ -42,7 +62,7 @@ The tone, format, language and level of detail they prefer, and anything they as
 --- end of handoff ---
 ```
 
-## Rules
+Rules for the handoff:
 
 - Cover the whole conversation, not only the last few messages. Give the most room to what is recent and unresolved.
 - Be specific and faithful. Do not invent anything. If something is uncertain or was never settled, say so.
@@ -51,27 +71,23 @@ The tone, format, language and level of detail they prefer, and anything they as
 - Keep every section. If a section has nothing to say, write "None."
 - Be as long as the conversation needs: usually 300 to 1,200 words, plus any work in progress that you include in full.
 - Write in the language the user has been using.
-- Stop at the "end of handoff" line. What comes after it is described under "Passing it on".
+- The handoff ends at the "end of handoff" line.
 
-## Passing it on
+## Step 3: pass it on
 
-After the "end of handoff" line, finish in one of two ways. In both, NAME stands for you: write `claude` if you are Claude, `chatgpt` if you are ChatGPT or Codex, and `gemini` if you are Gemini.
+After the "end of handoff" line, finish according to the result of step 1. NAME stands for you: write `claude` if you are Claude, `chatgpt` if you are ChatGPT or Codex, and `gemini` if you are Gemini.
 
-**If you can run shell commands on the user's own computer** (for example in Claude Code, Codex or Gemini CLI; a sandbox in the cloud does not count), find out before you write the handoff whether the Threefold app is installed:
+**Installed.** Ask: "Threefold is installed on this Mac. Shall I open it and pass this handoff in?" Then stop and wait. Only if the user says yes:
 
-```
-ls -d /Applications/Threefold.app ~/Applications/Threefold.app 2>/dev/null
-```
-
-If that prints a path, write the handoff as described above and then ask, after the "end of handoff" line: "Threefold is installed on this Mac. Shall I open it and pass this handoff in?" Then stop and wait. Only if the user says yes:
-
-1. Save the handoff, from its first line to the "end of handoff" line and nothing else, as a new file in the folder `~/Library/Application Support/Threefold/inbox/`. Create the folder if it is missing. Name the file `handoff-`, then the date and time in digits, then `.md`: for example `handoff-20260115-143000.md`.
+1. Save the handoff, from its first line to the "end of handoff" line and nothing else, as a new file in the folder `~/Library/Application Support/Threefold/inbox/`. Create the folder if it is missing. Name the file `handoff-`, then the date and time in digits, then `-NAME.md`: for example `handoff-20260115-143000-claude.md`.
 2. When the file is saved, and not before, run `open "threefold://handoff?from=NAME"`. Do the two steps one after the other, never at the same time. If you work in a sandbox that refuses this command, ask to run it outside the sandbox when your tool lets you ask.
-3. Tell the user that Threefold is showing the handoff and is waiting for them to choose where to continue. If the file was saved but Threefold could not be opened, say so, and tell them that the handoff is waiting for them: it appears as soon as they switch to Threefold. If the file could not be saved, tell them to copy the handoff and paste it into Threefold under File > Continue from a Handoff.
+3. Tell the user that Threefold is showing the handoff and is waiting for them to choose where to continue. If the file was saved but the `open` command failed, that is fine: say that the handoff is saved, that Threefold shows it by itself when it is open, and that otherwise it appears as soon as they open Threefold. If the file could not be saved, tell them to copy the handoff and paste it into Threefold under File > Continue from a Handoff.
 
-**In every other case** (you cannot run commands, the check printed nothing, or it failed), add one sentence after the "end of handoff" line. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. If you ran the check and it printed nothing, add that Threefold is not installed on this Mac and that you can install it if they ask.
+**Not installed.** Add one sentence. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. Add that Threefold is not on this Mac yet and that you can install it if they ask.
 
-Use the command and the link exactly as they are written here, changing only NAME. Never add anything else to them, and never put any part of the handoff or of the conversation into a link, a web address or a command. The handoff travels only as the text of your reply or as the saved file.
+**Unknown.** Add one sentence. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. Say nothing about whether Threefold is installed. One addition, only when you do run commands on the user's own Mac and were merely refused permission to run the check: say that you could not look, and that if Threefold is installed they can tell you so and you will pass the handoff in. If they then do, follow the steps under "Installed".
+
+Use the commands and the link exactly as they are written here, changing only NAME. Never add anything else to them, and never put any part of the handoff or of the conversation into a link, a web address or a command. The handoff travels only as the text of your reply or as the saved file.
 
 ## Installing Threefold
 
@@ -79,11 +95,11 @@ Follow this section only when the user asks you to install, download, set up or 
 
 Threefold is a free Mac app with public source code at https://github.com/nimeshbuilds/threefold. The ready-made app needs a Mac with Apple Silicon and macOS 13 or later. It is not signed with an Apple Developer ID and it is not notarized, which means Apple has not checked it.
 
-**If you cannot run shell commands on the user's own computer**, do not act as if you had installed anything. Give the user this link: https://nimeshbuilds.github.io/threefold/#start. Tell them that the quick start there has the download, and that because the app is not signed by Apple they have to allow it once under System Settings > Privacy & Security, as the page describes.
+**If you cannot run shell commands on the user's own computer**, do not act as if you had installed anything. That includes a chat app whose commands run on a computer in the cloud: if `uname -s` does not print `Darwin`, you are not on the user's Mac. Give the user this link: https://nimeshbuilds.github.io/threefold/#start. Tell them that the quick start there has the download, and that because the app is not signed by Apple they have to allow it once under System Settings > Privacy & Security, as the page describes.
 
 **If you can**, go through these steps in order and stop at the first one that fails, telling the user what happened:
 
-1. Check the Mac. `uname -m` must print `arm64`, and `sw_vers -productVersion` must print 13 or higher. If not, say that the ready-made app does not run on this Mac, point to "Build it from source" at the link above, and stop.
+1. Check the Mac. `uname -s` must print `Darwin` (if it does not, follow the paragraph above instead). `uname -m` must print `arm64`, and `sw_vers -productVersion` must print 13 or higher. If not, say that the ready-made app does not run on this Mac, point to "Build it from source" at the link above, and stop.
 2. Ask first. Tell the user all of this, in plain words: the app is not signed by Apple or notarized, so Apple has not checked it; installed this way, macOS does not show its usual warning for an app from an unidentified developer, so they should go ahead only if they trust the project; the download is about 290 MB; it goes into the Applications folder. Then ask whether to go ahead, and wait for a yes.
 3. Download the app and its checksum into a new, empty temporary folder with `curl -fL -O`, from these two addresses and no others:
    - https://github.com/nimeshbuilds/threefold/releases/latest/download/Threefold-mac-arm64.zip
@@ -100,3 +116,5 @@ Limits that have no exceptions:
 - If macOS blocks the app all the same, do not work around it. Send the user to the quick start at the link above, which has Apple's own steps for allowing an app.
 - Never ask for, read or handle the user's API keys. Only the user enters them, in the app itself.
 - Download only from the two addresses above, and run nothing else that comes from the internet.
+
+<!-- threefolds skill, revision 6 -->

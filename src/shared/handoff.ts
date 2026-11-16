@@ -17,22 +17,40 @@ export const HANDOFF_END = '--- end of handoff ---'
 export const HANDOFF_GUIDE_URL = 'https://nimeshbuilds.github.io/threefold/#handoff'
 /** The page a chat app's reply links to: it asks Threefold to open, and carries no part of the handoff. */
 export const HANDOFF_OPEN_URL = 'https://nimeshbuilds.github.io/threefold/open/'
-/** Heading of the skill's section on what to do with a handoff once it is written. */
-export const HANDOFF_DELIVERY_HEADING = '## Passing it on'
+/** The skill's steps, by their headings. The check comes first so that it is not skipped. */
+export const HANDOFF_CHECK_HEADING = '## Step 1: look for Threefold first'
+export const HANDOFF_WRITE_HEADING = '## Step 2: write the handoff'
+/** What to do with a handoff once it is written. */
+export const HANDOFF_DELIVERY_HEADING = '## Step 3: pass it on'
 /** Heading of the skill's last section: installing the Threefold app when the user asks for that. */
 export const SKILL_INSTALL_HEADING = '## Installing Threefold'
 
 /** The skill's instructions without its front matter. */
 export const HANDOFF_INSTRUCTIONS = skillFile.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').trim()
 
+/** The text between two of the skill's headings, without the first heading itself. */
+function between(start: string, end: string): string {
+  const from = HANDOFF_INSTRUCTIONS.indexOf(`${start}\n`)
+  const to = HANDOFF_INSTRUCTIONS.indexOf(`\n${end}`)
+  if (from === -1 || to === -1 || to < from) throw new Error(`The threefolds skill has lost a heading: ${start} / ${end}`)
+  return HANDOFF_INSTRUCTIONS.slice(from + start.length, to).trim()
+}
+
 /**
  * Only the part about writing a handoff. Threefold's own summary writer gets
- * this: it has nowhere to pass the handoff on to, so it must stop at the end line.
+ * this: it has no commands to run and nowhere to pass the handoff on to, so it
+ * must stop at the end line.
  */
-export const HANDOFF_WRITING = HANDOFF_INSTRUCTIONS.split(`\n${HANDOFF_DELIVERY_HEADING}`)[0]!.trim()
+export const HANDOFF_WRITING = between(HANDOFF_WRITE_HEADING, HANDOFF_DELIVERY_HEADING)
 
-/** Writing a handoff and passing it on: everything except installing the app. */
-export const HANDOFF_HOWTO = HANDOFF_INSTRUCTIONS.split(`\n${SKILL_INSTALL_HEADING}`)[0]!.trim()
+/** How many times the skill's text has been revised. An installed copy with a higher number is newer than this app's. */
+export function skillRevision(text: string): number {
+  const found = text.match(/<!-- threefolds skill, revision (\d{1,6}) -->/)
+  return found ? Number(found[1]) : 0
+}
+
+/** The three steps: looking for the app, writing a handoff and passing it on. Everything except installing the app. */
+export const HANDOFF_HOWTO = `${HANDOFF_CHECK_HEADING}\n\n${between(HANDOFF_CHECK_HEADING, SKILL_INSTALL_HEADING)}`
 
 /**
  * The prompt that does the skill's job in an app without Skills. It is pasted

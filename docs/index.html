@@ -346,7 +346,7 @@
         <article class="path">
           <p class="path-tag">Option A</p>
           <h3>Download the app</h3>
-          <p class="path-meta">Version 0.8.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+          <p class="path-meta">Version 0.8.1 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
 
           <div class="warn" role="note">
             <p><strong>Read this first: the app is not signed by Apple.</strong></p>
@@ -522,7 +522,7 @@
             <pre class="cmd"><code>$skill-installer install the skill at https://github.com/nimeshbuilds/threefold/tree/main/skills/threefolds</code></pre>
             <p>Or one command, then restart Codex:</p>
             <pre class="cmd"><code>mkdir -p ~/.agents/skills/threefolds &amp;&amp; curl -fsSL https://raw.githubusercontent.com/nimeshbuilds/threefold/main/skills/threefolds/SKILL.md -o ~/.agents/skills/threefolds/SKILL.md</code></pre>
-            <p>Then type <code>$threefolds</code> in any session. Codex's sandbox may refuse to open another app; the handoff is saved all the same, and it is waiting when you switch to Threefold.</p>
+            <p>Then type <code>$threefolds</code> in any session. Codex's sandbox refuses to open another app; the handoff is saved all the same, and Threefold shows it by itself.</p>
             <p class="small">
               <strong>The ChatGPT app</strong> has Skills only in Business, Enterprise, Healthcare and Edu workspaces.
               There, paste the install message below into a chat. On a personal plan, use the prompt under
@@ -660,7 +660,7 @@
         </li>
         <li>
           <h3>Say yes, and it arrives</h3>
-          <p>A coding tool on your Mac sees that Threefold is installed and asks whether to pass the handoff in. A chat app ends its reply with a link: copy the reply and click it. Either way Threefold shows you what arrived and asks where to continue. If a tool could save the handoff but not open the app, it is waiting when you switch to Threefold.</p>
+          <p>A coding tool on your Mac sees that Threefold is installed and asks whether to pass the handoff in. A chat app ends its reply with a link: copy the reply and click it. Either way Threefold shows you what arrived and asks where to continue. If a tool can save the handoff but not open the app, Threefold notices the saved file by itself, or shows it the next time you open it.</p>
         </li>
       </ol>
 
@@ -675,7 +675,7 @@
           </p>
           <ul class="ticks">
             <li><strong>The link carries nothing.</strong> <code>threefold://handoff</code> only tells the app to look for a handoff that is already on your Mac. Text put into the link is ignored, and no other link does anything.</li>
-            <li><strong>Two places are looked at, no others.</strong> Threefold's own inbox folder, where the skill saves the file, and your clipboard. Text that is not a Threefold handoff is left alone.</li>
+            <li><strong>Two places are looked at, no others.</strong> Threefold's own inbox folder, where the skill saves the file and which the app watches while it is open, and your clipboard when a link asks. Text that is not a Threefold handoff is left alone.</li>
             <li><strong>Files are checked.</strong> A file is taken only if it is a plain file that you own, with the expected name, under 1 MB and less than a day old. Links to other files are never followed.</li>
             <li><strong>The sender is a claim.</strong> macOS does not tell an app who opened a link, so Threefold shows what the handoff says about itself and points out when the link and the summary disagree.</li>
           </ul>
@@ -744,7 +744,7 @@
       <p class="note">
         Read a handoff before you continue with it: it is a summary of your conversation, so it can contain whatever
         you discussed. The skill tells the assistant to leave out passwords, keys and card numbers, and never to put
-        any part of a conversation into a link. Run for real so far: Claude Code and Codex, each on a paid plan. The
+        any part of a conversation into a link. Run for real so far: Claude Code and Codex, each on a paid plan; not yet the chat apps or Gemini CLI. The
         steps for the chat apps follow each company's help pages; they have not been tested by us inside every plan.
       </p>
     </section>
@@ -771,7 +771,7 @@
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is an early preview, built in public. Version 0.8.0 is available as a download for Apple Silicon
+        Threefold is an early preview, built in public. Version 0.8.1 is available as a download for Apple Silicon
         Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
         testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>

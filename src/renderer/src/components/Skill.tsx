@@ -26,6 +26,7 @@ const STATE_TEXT: Record<SkillStatus['state'], string> = {
   missing: 'Not installed',
   current: 'Installed',
   outdated: 'An older copy is installed',
+  newer: 'Installed, and newer than this version of Threefold has',
   linked: 'Linked from another folder; left alone',
   foreign: 'A different skill has this name; left alone',
 }
@@ -50,7 +51,7 @@ const EXAMPLES: Record<Provider, Array<{ run: string; where: string; what: strin
     {
       run: `$${SKILL_NAME} then pass it to Threefold`,
       where: 'Codex',
-      what: 'Write it and save it for Threefold on this Mac, after asking. If Codex’s sandbox will not open the app, the handoff is waiting when you switch to Threefold.',
+      what: 'Write it and save it for Threefold on this Mac, after asking. Codex’s sandbox will not open another app, so Threefold picks the saved handoff up by itself.',
     },
     { run: `Use the ${SKILL_NAME} skill for this chat.`, where: 'ChatGPT', what: 'Works once the skill is in your workspace.' },
   ],
@@ -95,7 +96,7 @@ function ToolRow({ status, refresh }: { status: SkillStatus; refresh: () => Prom
     <div className="skill-row" data-target={status.target}>
       <div className="skill-row-text">
         <strong>{tool.name}</strong>
-        <span className={`status ${status.state === 'current' ? 'ok' : ''}`}>
+        <span className={`status ${status.state === 'current' || status.state === 'newer' ? 'ok' : ''}`}>
           {status.state === 'missing' && !status.toolFound ? `${tool.name} was not found on this Mac` : STATE_TEXT[status.state]}
         </span>
         <code className="skill-path">{status.path}</code>
@@ -283,7 +284,8 @@ export function SkillTab() {
         <li>
           <strong>From a coding tool on this Mac.</strong> The skill checks that Threefold is installed and asks you
           first. If you say yes, it saves the handoff as a file in Threefold’s inbox folder and opens Threefold. If
-          the tool is not allowed to open another app, the handoff is here when you come back to Threefold.
+          the tool is not allowed to open another app, Threefold notices the saved handoff by itself while it is open,
+          or shows it the next time you open it.
         </li>
         <li>
           <strong>From a chat app in the browser.</strong> The reply ends with a link. Copy the reply, click the link,

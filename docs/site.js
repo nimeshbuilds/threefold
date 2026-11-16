@@ -75,7 +75,10 @@
     .then(function (text) {
       // Drop the front matter between the two "---" lines. The prompt is what follows,
       // up to the section about installing the app, which a pasted prompt has no use for.
-      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').split('\n## Installing Threefold')[0].trim()
+      var body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/, '').split('\n## Installing Threefold')[0]
+      // The steps start at "Step 1"; what stands before it only points at the installing section.
+      var first = body.indexOf('## Step 1')
+      body = (first === -1 ? body : body.slice(first)).trim()
       var code = box.querySelector('code')
       code.textContent = intro + '\n\n' + body
       box.hidden = false

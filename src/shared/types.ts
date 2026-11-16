@@ -188,10 +188,11 @@ export interface SkillStatus {
   toolFound: boolean
   /**
    * missing: not installed. current: the same text this version of Threefold ships.
-   * outdated: an older or edited copy. linked: a link to a folder somewhere else,
-   * which Threefold leaves alone. foreign: a different skill that happens to have this name.
+   * outdated: an older or edited copy. newer: a later revision than this app has,
+   * which it will not replace. linked: a link to a folder somewhere else, which
+   * Threefold leaves alone. foreign: a different skill that happens to have this name.
    */
-  state: 'missing' | 'current' | 'outdated' | 'linked' | 'foreign'
+  state: 'missing' | 'current' | 'outdated' | 'newer' | 'linked' | 'foreign'
   /** Where the skill file is, or would be, with the home folder written as "~". */
   path: string
 }

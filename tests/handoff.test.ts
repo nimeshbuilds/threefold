@@ -1,6 +1,7 @@
 // Automatic fallback and handoff summaries: when a chat moves, where it goes,
 // what the summary request looks like, and what is saved and billed.
 
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +11,7 @@ import type { ChatEvent, ChatMessage, Conversation, HandoffProgress, LedgerEntry
 import { addRequest, emptyUsage } from '@shared/pricing'
 import { DEFAULT_FALLBACK, cleanFallback, creditUsedPct, planFallback, type CreditState } from '@shared/fallback'
 import {
+  HANDOFF_CHECK_HEADING,
   HANDOFF_DELIVERY_HEADING,
   HANDOFF_END,
   HANDOFF_HEADING,
@@ -20,6 +22,7 @@ import {
   HANDOFF_PROMPT_INTRO,
   HANDOFF_WRITER_OPENING,
   HANDOFF_WRITER_SYSTEM,
+  HANDOFF_WRITE_HEADING,
   HANDOFF_WRITING,
   SKILL_FILE,
   SKILL_INSTALL_HEADING,
@@ -30,8 +33,9 @@ import {
   handoffWriterPrompt,
   parseHandoff,
   parseHandoffLink,
+  skillRevision,
 } from '@shared/handoff'
-import { INBOX_FILE } from '../src/main/incoming'
+import { INBOX_FILE, senderFromFileName } from '../src/main/incoming'
 import { assistantLabel, hasHistory, writeHandoff } from '../src/main/handoff'
 import { buildSystemPrompt, type TurnContext, type TurnResult } from '../src/main/providers/common'
 import { Store } from '../src/main/store'
@@ -156,19 +160,51 @@ describe('the threefolds skill', () => {
     expect(HANDOFF_WRITER_SYSTEM).toContain(HANDOFF_WRITING)
     expect(HANDOFF_PROMPT).toBe(`${HANDOFF_PROMPT_INTRO}\n\n${HANDOFF_HOWTO}`)
     // A prompt pasted into a chat is for getting a handoff: it says nothing about installing.
+    expect(HANDOFF_HOWTO.startsWith(HANDOFF_CHECK_HEADING)).toBe(true)
+    expect(HANDOFF_HOWTO).toContain(HANDOFF_WRITE_HEADING)
     expect(HANDOFF_HOWTO).toContain(HANDOFF_DELIVERY_HEADING)
     expect(HANDOFF_PROMPT).not.toContain(SKILL_INSTALL_HEADING)
     expect(HANDOFF_PROMPT).not.toMatch(/curl|releases\/latest/)
   })
 
-  it('gives the app only the part about writing: its own writer has nowhere to pass a handoff on to', () => {
-    expect(HANDOFF_INSTRUCTIONS).toContain(HANDOFF_DELIVERY_HEADING)
-    expect(HANDOFF_INSTRUCTIONS.startsWith(HANDOFF_WRITING)).toBe(true)
+  it('puts the steps in an order that cannot skip the check', () => {
+    const at = [HANDOFF_CHECK_HEADING, HANDOFF_WRITE_HEADING, HANDOFF_DELIVERY_HEADING, SKILL_INSTALL_HEADING].map((heading) => HANDOFF_INSTRUCTIONS.indexOf(`\n${heading}\n`))
+    expect(at.every((index) => index > 0)).toBe(true)
+    expect([...at].sort((x, y) => x - y)).toEqual(at)
+  })
+
+  it('looks for the app before writing anything, and may not claim a result it did not see', () => {
+    // Seen with a real assistant: it skipped the check, then wrote that it had checked.
+    const check = HANDOFF_INSTRUCTIONS.slice(HANDOFF_INSTRUCTIONS.indexOf(HANDOFF_CHECK_HEADING), HANDOFF_INSTRUCTIONS.indexOf(HANDOFF_WRITE_HEADING))
+    expect(check).toMatch(/Do this before you write a single word of your reply/)
+    // `test` is used because Claude Code refuses to list a folder outside the project, even to see whether it exists.
+    const command = 'uname -s; test -d /Applications/Threefold.app -o -d ~/Applications/Threefold.app && echo threefold-is-installed || echo threefold-is-not-installed'
+    expect(check).toContain(command)
+    expect(check).not.toMatch(/\bls -d\b/)
+    // Run here, on a Mac, the command answers with the system's name and one of its two words, and never fails.
+    const ran = spawnSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+    expect(ran.status).toBe(0)
+    expect(ran.stdout).toMatch(/^Darwin\nthreefold-is-(not-)?installed\n$/)
+    // Three results, and only two of them say anything about the app.
+    expect(check).toMatch(/\*\*Installed\.\*\* It prints `Darwin` and `threefold-is-installed`/)
+    expect(check).toMatch(/\*\*Not installed\.\*\* It prints `Darwin` and `threefold-is-not-installed`/)
+    expect(check).toMatch(/\*\*Unknown\.\*\* It prints anything else \(for example `Linux`\), it fails, you are not allowed to run it, or you have no tool/)
+    // A chat app's commands run in the cloud, which is not the user's Mac.
+    expect(check).toMatch(/computer in the cloud and not on the user's Mac/)
+    expect(check).toMatch(/Never say that Threefold is installed, or that it is not, unless you ran this command yourself in this turn/)
+    expect(check).toMatch(/never write that you checked when you did not/)
+  })
+
+  it('gives the app only the part about writing: its own writer has no commands and nowhere to pass a handoff on to', () => {
+    expect(HANDOFF_INSTRUCTIONS).toContain(HANDOFF_WRITING)
+    expect(HANDOFF_WRITING.startsWith('Write a handoff summary of this whole conversation')).toBe(true)
+    expect(HANDOFF_WRITING).toContain(HANDOFF_HEADING)
     expect(HANDOFF_WRITING).toContain(HANDOFF_END)
     expect(HANDOFF_WRITING).toMatch(/Leave out secrets/)
+    expect(HANDOFF_WRITING).toMatch(/The handoff ends at the "end of handoff" line\.$/)
     for (const text of [HANDOFF_WRITING, HANDOFF_WRITER_SYSTEM]) {
-      expect(text).not.toContain(HANDOFF_DELIVERY_HEADING)
-      expect(text).not.toMatch(/threefold:\/\/|Application Support|open "/)
+      for (const heading of [HANDOFF_CHECK_HEADING, HANDOFF_WRITE_HEADING, HANDOFF_DELIVERY_HEADING, SKILL_INSTALL_HEADING]) expect(text).not.toContain(heading)
+      expect(text).not.toMatch(/threefold:\/\/|Application Support|open "|uname|ls -d|step 1|step 3/i)
     }
     const prompt = handoffWriterPrompt({ transcript: 'USER:\nhi', from: 'Claude', today: 'today' })
     expect(prompt).toMatch(/write nothing after it/)
@@ -176,28 +212,46 @@ describe('the threefolds skill', () => {
 
   it('passes a handoff on only after asking, and never inside a link', () => {
     const delivery = HANDOFF_HOWTO.slice(HANDOFF_HOWTO.indexOf(HANDOFF_DELIVERY_HEADING))
-    // It looks for the app, asks, and waits for a yes.
-    expect(delivery).toContain('ls -d /Applications/Threefold.app ~/Applications/Threefold.app')
-    expect(delivery).toMatch(/Shall I open it and pass this handoff in\?/)
-    expect(delivery).toMatch(/Then stop and wait\. Only if the user says yes/)
+    expect(delivery).toMatch(/finish according to the result of step 1/)
+    // Installed: it asks, and waits for a yes.
+    expect(delivery).toMatch(/\*\*Installed\.\*\* Ask: "Threefold is installed on this Mac\. Shall I open it and pass this handoff in\?" Then stop and wait\. Only if the user says yes/)
     // The file goes where the app looks, under a name the app accepts.
     expect(delivery).toContain('~/Library/Application Support/Threefold/inbox/')
-    const example = delivery.match(/handoff-[0-9-]+\.md/)?.[0] ?? ''
+    const example = delivery.match(/handoff-[0-9]{8}-[0-9]{6}-[a-z]+\.md/)?.[0] ?? ''
     expect(example).toMatch(INBOX_FILE)
     // The link the skill opens is one the app understands, for each of the three names.
     expect(delivery).toContain('open "threefold://handoff?from=NAME"')
     // Save first, then open; and a refused open still leaves the handoff where the app finds it.
     expect(delivery).toMatch(/When the file is saved, and not before, run `open/)
     expect(delivery).toMatch(/one after the other, never at the same time/)
-    expect(delivery).toMatch(/saved but Threefold could not be opened[^.]*\.?[^.]*it appears as soon as they switch to Threefold/)
+    expect(delivery).toMatch(/saved but the `open` command failed, that is fine: say that the handoff is saved, that Threefold shows it by itself when it is open/)
+    // The file's name says who it is from, for the times when no link can be opened.
+    expect(senderFromFileName(example)).toBe('claude')
+    expect(delivery).toMatch(/then `-NAME\.md`/)
     for (const sender of ['claude', 'chatgpt', 'gemini'] as const) {
       expect(delivery).toContain(`\`${sender}\``)
       expect(parseHandoffLink(`threefold://handoff?from=${sender}`)).toEqual({ sender })
     }
-    // Chat apps get the web page, which is the one the app publishes.
-    expect(delivery).toContain(`${HANDOFF_OPEN_URL}?from=NAME`)
+    // Not installed, and unknown: the web page, which is the one the app publishes. Only the first may offer to install.
+    const absent = delivery.slice(delivery.indexOf('**Not installed.**'), delivery.indexOf('**Unknown.**'))
+    const unknown = delivery.slice(delivery.indexOf('**Unknown.**'), delivery.indexOf('Use the commands and the link'))
+    for (const part of [absent, unknown]) expect(part).toContain(`${HANDOFF_OPEN_URL}?from=NAME`)
+    expect(absent).toMatch(/not on this Mac yet and that you can install it if they ask/)
+    expect(unknown).toMatch(/Say nothing about whether Threefold is installed/)
+    expect(unknown).not.toMatch(/install it/)
+    // Refused permission to look is not "not installed": the user can say that it is there.
+    expect(unknown).toMatch(/merely refused permission to run the check: say that you could not look/)
     // And the rule that keeps conversations out of links.
     expect(delivery).toMatch(/never put any part of the handoff or of the conversation into a link, a web address or a command/)
+  })
+
+  it('carries a revision number, so an installed copy can be told from an older or a newer one', () => {
+    expect(skillRevision(SKILL_FILE)).toBeGreaterThanOrEqual(6)
+    expect(skillRevision('---\nname: threefolds\n---\nAn early copy with no number.')).toBe(0)
+    expect(skillRevision('text\n<!-- threefolds skill, revision 12 -->\n')).toBe(12)
+    // The number sits in the part about installing, so neither the pasted prompt nor the app's own writer carries it.
+    expect(HANDOFF_PROMPT).not.toContain('revision')
+    expect(HANDOFF_WRITER_SYSTEM).not.toContain('revision')
   })
 
   it('installs the app only when asked, from the release, after saying what that means', () => {
@@ -228,6 +282,9 @@ describe('the threefolds skill', () => {
     expect(install).toMatch(/do not remove quarantine or any other attribute/)
     expect(install).toMatch(/Never ask for, read or handle the user's API keys/)
     expect(install).not.toMatch(/xattr|spctl|master-disable/)
+    // Commands that run in the cloud are not the user's Mac.
+    expect(install).toMatch(/if `uname -s` does not print `Darwin`, you are not on the user's Mac/)
+    expect(install).toMatch(/`uname -s` must print `Darwin`/)
     // An assistant that cannot run commands sends the user to the quick start instead.
     expect(install).toContain('https://nimeshbuilds.github.io/threefold/#start')
   })

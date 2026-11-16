@@ -226,6 +226,8 @@ void app.whenReady().then(() => {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show()
       mainWindow.focus()
+      // The user asked for this handoff to be passed in, so Threefold comes to the front for it.
+      if (process.platform === 'darwin') app.focus({ steal: true })
       sendToWindow('handoff:incoming', null)
     },
   )
@@ -233,6 +235,8 @@ void app.whenReady().then(() => {
   // A link that brings the app forward also focuses the window. The link is given a
   // moment to arrive first, so that it takes the file together with who it says sent it.
   onWindowFocus = () => void setTimeout(() => incoming.checkInbox(), 1200)
+  // A handoff saved while Threefold is open appears by itself, link or no link.
+  const stopWatchingInbox = incoming.watch()
   for (const url of earlyLinks.splice(0)) onLink(url)
   // Makes this copy of the app the one that threefold:// links open. Left alone in
   // development and in tests, where it would point links at a throwaway build.
@@ -321,6 +325,7 @@ void app.whenReady().then(() => {
     cli.cancelAll()
     bridge.stop()
     updater.stop()
+    stopWatchingInbox()
   })
 })
 

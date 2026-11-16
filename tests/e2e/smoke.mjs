@@ -651,7 +651,11 @@ try {
   check('nothing can be continued until a summary is pasted', await page.locator('.handoff-modal .btn.primary').isDisabled())
   await page.click('.handoff-modal .btn:has-text("Copy the prompt")')
   const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
-  check('the prompt for apps without Skills can be copied', /^Follow the instructions below/.test(copied) && /# Threefold handoff/.test(copied) && /end of handoff/.test(copied), copied.slice(0, 50))
+  check(
+    'the prompt for apps without Skills can be copied, and starts with the check',
+    /^Follow the instructions below for this conversation, right now\.\n\n## Step 1: look for Threefold first/.test(copied) && /# Threefold handoff/.test(copied) && /end of handoff/.test(copied) && !/Installing Threefold/.test(copied),
+    copied.slice(0, 50),
+  )
   await page.fill(
     '.handoff-input',
     'Sure, here it is:\n\n# Threefold handoff\n\n**Title:** Budget review\n**From:** ChatGPT\n\n## Goal\nCut hosting costs by a third.\n\n--- end of handoff ---\nCopy this message.',
@@ -808,6 +812,21 @@ try {
   await page.click('.incoming-modal .btn:has-text("Discard")')
   await page.waitForSelector('.incoming-modal', { state: 'detached' })
 
+  // ---- the same with nothing else happening: the app notices the file by itself ----
+  fs.writeFileSync(
+    path.join(inbox, 'handoff-20261116-093000-claude.md'),
+    '# Threefold handoff\n\n- **Title:** Noticed by itself\n- **From:** Claude Opus 5\n\n## Goal\nAppear the moment the file is saved.\n\n--- end of handoff ---\n',
+  )
+  await page.waitForSelector('.incoming-modal', { timeout: 8000 })
+  const noticed = (await page.textContent('.incoming-modal')) ?? ''
+  check(
+    'a handoff saved while the app is open appears by itself, with the sender from the file’s name',
+    /Noticed by itself/.test(noticed) && /Says it is fromClaude · summary written by Claude Opus 5/.test(noticed) && (await page.textContent('.incoming-pick .seg button.active')) === 'Claude',
+    noticed.slice(60, 240),
+  )
+  await page.click('.incoming-modal .btn:has-text("Discard")')
+  await page.waitForSelector('.incoming-modal', { state: 'detached' })
+
   // ---- settings: installing the threefolds skill ----
   await page.click('.user-row')
   await page.click('.modal-nav .side-btn:has-text("Handoff skill")')
@@ -845,7 +864,7 @@ try {
   const installMessage = await app.evaluate(({ clipboard }) => clipboard.readText())
   check(
     'chat apps get a message that creates the skill',
-    /^Create a skill named "threefolds"/.test(installMessage) && /# Threefold handoff/.test(installMessage) && /Passing it on/.test(installMessage),
+    /^Create a skill named "threefolds"/.test(installMessage) && /# Threefold handoff/.test(installMessage) && /Step 3: pass it on/.test(installMessage),
     installMessage.slice(0, 60),
   )
   await page.click('.skill-group[data-provider="claude"] .btn:has-text("Save the ZIP")')
