@@ -6,6 +6,7 @@ import { API_NAME, MODE_NAME, ORG_URL, daysUntil, shortDate } from '../lib/forma
 import { useApp, type SettingsTab } from '../state'
 import { FallbackSettings, HandoffImportBlock } from './Handoff'
 import { SkillTab } from './Skill'
+import { UpdateSettings } from './Update'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 
@@ -583,6 +584,7 @@ export function SettingsModal() {
                   <p className="muted">Three assistants, one local app, your own API credits.</p>
                 </div>
               </div>
+              <UpdateSettings />
               <p className="muted small">
                 Threefold is an independent app. It is not made by, affiliated with or endorsed by Anthropic, OpenAI or
                 Google. “Claude”, “ChatGPT” and “Gemini” are trademarks of their owners and are used here only to say

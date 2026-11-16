@@ -1,5 +1,7 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
+import type { UpdateState } from './update'
+
 export type Provider = 'claude' | 'chatgpt' | 'gemini'
 export const PROVIDERS: Provider[] = ['claude', 'chatgpt', 'gemini']
 
@@ -259,6 +261,10 @@ export interface Settings {
   fallback: FallbackSettings
   /** Code tab: run new sessions through the official CLI on the user's subscription first. */
   subscription: Record<CliProvider, boolean>
+  /** Ask GitHub now and then whether a newer Threefold has been released. */
+  updates: { auto: boolean }
+  /** The version that ran last, so the app can say when it has just been updated. */
+  lastVersion?: string
 }
 
 export type KeyStatus = Record<Provider, boolean>
@@ -523,6 +529,15 @@ export interface ThreefoldApi {
     handoff(conversationId: string, to: Provider): Promise<{ ok: boolean; error?: string }>
     stop(conversationId: string): Promise<void>
     onEvent(listener: (event: ChatEvent) => void): () => void
+  }
+  update: {
+    /** What is known about updates right now. */
+    get(): Promise<UpdateState>
+    /** Asks GitHub now. */
+    check(): Promise<UpdateState>
+    /** Downloads, checks and installs the update that was found. The app closes and opens again. */
+    install(): Promise<{ ok: boolean; error?: string }>
+    onState(listener: (state: UpdateState) => void): () => void
   }
   handoff: {
     /**

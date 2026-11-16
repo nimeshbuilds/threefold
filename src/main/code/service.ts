@@ -138,6 +138,11 @@ export class CodeService {
     }
   }
 
+  /** True while a coding session is running. */
+  busy(): boolean {
+    return this.running.size > 0
+  }
+
   stopAll(): void {
     for (const id of [...this.running.keys()]) this.stop(id)
   }

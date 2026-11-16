@@ -3073,3 +3073,137 @@ button.tool-pill {
   padding-left: 20px;
   font-size: 13.5px;
 }
+
+/* ---------- updates ---------- */
+
+.update-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.update-pill:hover {
+  filter: brightness(1.06);
+}
+
+.update-pill.working {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.modal.update-modal {
+  max-width: 540px;
+}
+
+.update-steps {
+  margin: 14px 0 6px;
+}
+
+.update-steps li + li {
+  margin-top: 6px;
+}
+
+.update-note {
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+
+.update-note.error {
+  border-color: var(--bad);
+}
+
+.update-progress {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.update-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.update-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.update-settings h3 {
+  margin: 0 0 10px;
+}
+
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 13.5px;
+}
+
+/* ---------- the two kinds of handoff ---------- */
+
+.handoff-kind {
+  display: inline-block;
+  justify-self: start;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+}
+
+.handoff-kind.inside {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.handoff-text > .handoff-kind,
+.handoff-modal > .handoff-kind {
+  display: table;
+}
+
+.handoff-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+
+.handoff-kind-card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+
+.handoff-kind-card p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}

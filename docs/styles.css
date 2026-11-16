@@ -1158,3 +1158,21 @@ h4 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- the two kinds of handoff ---------- */
+
+.kinds .path-meta {
+  margin-bottom: 18px;
+}
+
+.kinds .path:first-child {
+  border-top: 4px solid var(--ember);
+}
+
+.kinds .path:last-child {
+  border-top: 4px solid var(--tide);
+}
+
+.kinds .small a {
+  font-weight: 600;
+}

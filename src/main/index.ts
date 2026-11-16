@@ -13,6 +13,8 @@ import { IncomingHandoffs, inboxDir } from './incoming'
 import { registerIpc } from './ipc'
 import { Secrets } from './secrets'
 import { Store } from './store'
+import { Updater } from './updater'
+import { UPDATE_DOWNLOAD_BASE, UPDATE_FEED, bundlePathOf, updateBlocker } from '@shared/update'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
@@ -140,7 +142,25 @@ function createWindow(): void {
 
 function buildMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    ...(process.platform === 'darwin'
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { label: 'Check for Updates…', click: () => sendToWindow('menu', 'check-updates') },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'File',
       submenu: [
@@ -248,7 +268,46 @@ void app.whenReady().then(() => {
   // The app never needs camera, microphone, location or notifications.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
 
-  registerIpc({ store, secrets, chat, code, cli, incoming, artifacts, window: () => mainWindow })
+  // Updates. Tests and demos may point the check somewhere else, pretend to be an
+  // older version, and keep the replaced copy out of the real Trash; none of that
+  // is listened to in a normal run. A copy run from the source never asks GitHub.
+  const testing = Boolean(process.env.THREEFOLD_DATA_DIR)
+  const feed = testing ? process.env.THREEFOLD_UPDATE_FEED : undefined
+  const ownFeed = feed && feed !== 'default' ? feed : null
+  const exe = app.getPath('exe')
+  const cannotUpdate = updateBlocker({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch,
+    exePath: exe,
+    writable: (dir) => {
+      try {
+        fs.accessSync(dir, fs.constants.W_OK)
+        return true
+      } catch {
+        return false
+      }
+    },
+  })
+  const updater = new Updater({
+    current: (testing && process.env.THREEFOLD_UPDATE_CURRENT) || app.getVersion(),
+    feedUrl: ownFeed ?? UPDATE_FEED,
+    downloadBase: ownFeed ? ownFeed.slice(0, ownFeed.lastIndexOf('/') + 1) : UPDATE_DOWNLOAD_BASE,
+    workDir: path.join(app.getPath('userData'), 'updates'),
+    bundlePath: cannotUpdate ? null : bundlePathOf(exe),
+    manual: cannotUpdate ?? undefined,
+    trashDir: (testing && process.env.THREEFOLD_UPDATE_TRASH) || path.join(app.getPath('home'), '.Trash'),
+    offline: !feed && (DEMO || !app.isPackaged),
+    relaunch: !(testing && process.env.THREEFOLD_UPDATE_NO_RELAUNCH === '1'),
+    emit: (state) => sendToWindow('update:state', state),
+    quit: () => app.quit(),
+  })
+  const lastVersion = store.getSettings().lastVersion
+  if (lastVersion !== app.getVersion()) store.updateSettings({ lastVersion: app.getVersion() })
+  updater.noteUpdatedFrom(lastVersion)
+  updater.schedule(store.getSettings().updates.auto, feed ? 1500 : undefined)
+
+  registerIpc({ store, secrets, chat, code, cli, incoming, updater, artifacts, window: () => mainWindow })
   buildMenu()
   createWindow()
   started = true
@@ -261,6 +320,7 @@ void app.whenReady().then(() => {
     code.stopAll()
     cli.cancelAll()
     bridge.stop()
+    updater.stop()
   })
 })
 

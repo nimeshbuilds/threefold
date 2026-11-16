@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS: Settings = {
   reviewers: [],
   fallback: { ...DEFAULT_FALLBACK },
   subscription: { claude: false, chatgpt: false },
+  updates: { auto: true },
 }
 
 const IMAGE_EXT: Record<string, string> = {
@@ -161,6 +162,7 @@ export class Store {
     if (!Array.isArray(this.settings.reviewers)) this.settings.reviewers = []
     this.settings.fallback = cleanFallback(saved.fallback)
     this.settings.subscription = { claude: saved.subscription?.claude === true, chatgpt: saved.subscription?.chatgpt === true }
+    this.settings.updates = { auto: saved.updates?.auto !== false }
     this.loadIndex()
   }
 
@@ -189,6 +191,7 @@ export class Store {
         claude: (patch.subscription?.claude ?? this.settings.subscription.claude) === true,
         chatgpt: (patch.subscription?.chatgpt ?? this.settings.subscription.chatgpt) === true,
       },
+      updates: { auto: (patch.updates?.auto ?? this.settings.updates.auto) !== false },
     }
     writeJson(this.file('settings.json'), this.settings)
     return this.settings

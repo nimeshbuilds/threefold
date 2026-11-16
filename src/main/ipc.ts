@@ -31,6 +31,7 @@ import { openaiErrorMessage, verifyOpenAIKey } from './providers/openai'
 import type { Secrets } from './secrets'
 import { installSkill, removeSkill, saveSkillZip, skillStatuses } from './skillInstall'
 import type { Store } from './store'
+import type { Updater } from './updater'
 
 export interface IpcDeps {
   store: Store
@@ -39,6 +40,7 @@ export interface IpcDeps {
   code: CodeService
   cli: CliManager
   incoming: IncomingHandoffs
+  updater: Updater
   artifacts: Map<string, string>
   window: () => BrowserWindow | null
 }
@@ -74,7 +76,7 @@ function cleanReviewers(value: unknown): ModelRef[] {
 }
 
 export function registerIpc(deps: IpcDeps): void {
-  const { store, secrets, chat, code, cli, incoming, artifacts } = deps
+  const { store, secrets, chat, code, cli, incoming, updater, artifacts } = deps
   const modelsCache = path.join(store.dir, 'available-models.json')
 
   const readAvailable = (): Partial<Record<Provider, string[]>> => {
@@ -101,7 +103,11 @@ export function registerIpc(deps: IpcDeps): void {
   // ---------- settings and keys ----------
 
   handle('settings:get', () => store.getSettings())
-  handle('settings:update', (patch: Partial<Settings>) => store.updateSettings(patch))
+  handle('settings:update', (patch: Partial<Settings>) => {
+    const settings = store.updateSettings(patch)
+    if (patch?.updates) updater.schedule(settings.updates.auto)
+    return settings
+  })
 
   handle('keys:status', () => (DEMO ? { claude: true, chatgpt: true, gemini: true } : secrets.status()))
   handle('keys:save', async (provider: Provider, key: string) => {
@@ -212,6 +218,20 @@ export function registerIpc(deps: IpcDeps): void {
     isProvider(to) ? chat.handoff(String(conversationId), to) : { ok: false, error: 'Unknown provider.' },
   )
   handle('chat:stop', (conversationId: string) => chat.stop(conversationId))
+
+  // ---------- updates ----------
+
+  handle('update:get', () => {
+    const state = updater.get()
+    updater.clearUpdatedFrom()
+    return state
+  })
+  handle('update:check', () => updater.check(true))
+  handle('update:install', () => {
+    // Installing closes the app, which would cut a reply short.
+    if (chat.busy() || code.busy()) return { ok: false, error: 'A reply is still being written. Update when it has finished.' }
+    return updater.install()
+  })
 
   // ---------- handoffs from outside, and the skill that sends them ----------
 

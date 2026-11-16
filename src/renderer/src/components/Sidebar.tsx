@@ -4,6 +4,7 @@ import { formatUsd } from '@shared/pricing'
 import nimeshbuildsLogo from '../assets/nimeshbuilds.png'
 import { MODE_NAME, ORG_URL, daysUntil, groupByRecency } from '../lib/format'
 import { connectedProviders, useApp } from '../state'
+import { UpdateButton } from './Update'
 import { Icon } from './Icon'
 import { Wordmark } from './Logo'
 import { Popover } from './Popover'
@@ -284,6 +285,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-foot">
+        <UpdateButton />
         <CreditMeter />
         <button className="user-row" onClick={() => openSettings('general')}>
           <span className="avatar">{(name.trim()[0] ?? 'T').toUpperCase()}</span>

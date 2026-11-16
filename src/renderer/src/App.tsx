@@ -9,6 +9,7 @@ import { ProjectView, ProjectsList } from './components/Projects'
 import { SettingsModal } from './components/Settings'
 import { Sidebar } from './components/Sidebar'
 import { SubscriptionPanel } from './components/Subscription'
+import { UpdateModal } from './components/Update'
 
 const api = window.threefold
 
@@ -50,13 +51,16 @@ export function App() {
       else if (command === 'mode-gemini') state.setMode('gemini')
       else if (command === 'threefold') state.openThreefold()
       else if (command === 'paste-handoff') state.openHandoffModal()
+      else if (command === 'check-updates') void state.checkForUpdates()
     })
     const offIncoming = api.handoff.onIncoming(() => void useApp.getState().checkIncoming())
+    const offUpdate = api.update.onState((update) => useApp.setState({ update }))
     return () => {
       offChat()
       offUsage()
       offMenu()
       offIncoming()
+      offUpdate()
     }
   }, [])
 
@@ -77,6 +81,7 @@ export function App() {
       {modal === 'handoff' && <HandoffModal />}
       {modal === 'incoming' && <IncomingHandoffModal />}
       {modal === 'subscription' && <SubscriptionPanel />}
+      {modal === 'update' && <UpdateModal />}
       {toast && (
         <div className={`toast ${toast.tone}`} role="status">
           {toast.text}

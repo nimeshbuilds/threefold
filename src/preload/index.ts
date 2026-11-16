@@ -3,6 +3,7 @@
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ChatEvent, CliEvent, CodeEvent, Provider, SpendSummary, ThreefoldApi } from '@shared/types'
+import type { UpdateState } from '@shared/update'
 
 const call =
   (channel: string) =>
@@ -35,6 +36,12 @@ const api: ThreefoldApi & { onMenu(listener: (command: string) => void): () => v
     handoff: call('chat:handoff'),
     stop: call('chat:stop'),
     onEvent: (listener) => subscribe<ChatEvent>('chat:event', listener),
+  },
+  update: {
+    get: call('update:get'),
+    check: call('update:check'),
+    install: call('update:install'),
+    onState: (listener) => subscribe<UpdateState>('update:state', listener),
   },
   handoff: {
     take: call('handoff:take'),

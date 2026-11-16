@@ -3,6 +3,7 @@
 // Set THREEFOLD_APP to a packaged binary (dist/mac-arm64/Threefold.app/Contents/MacOS/Threefold)
 // to run the same checks against the packaged app.
 import fs from 'node:fs'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron } from 'playwright-core'
@@ -37,6 +38,30 @@ const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-project-'))
 const skillHome = fs.mkdtempSync(path.join(os.tmpdir(), 'threefold-skill-home-'))
 fs.mkdirSync(path.join(skillHome, '.claude'))
 
+// A stand-in for GitHub's "newest release" answer, so the update check can be driven.
+// It starts out saying that this version is the newest.
+const thisVersion = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version
+const feed = { version: thisVersion, asked: 0 }
+const feedServer = http.createServer((request, response) => {
+  if (request.url !== '/latest.json') return void response.writeHead(404).end()
+  feed.asked += 1
+  const tag = `v${feed.version}`
+  const base = `http://127.0.0.1:${feedServer.address().port}/${tag}/`
+  response.writeHead(200, { 'content-type': 'application/json' }).end(
+    JSON.stringify({
+      tag_name: tag,
+      draft: false,
+      prerelease: false,
+      html_url: `https://github.com/nimeshbuilds/threefold/releases/tag/${tag}`,
+      assets: [
+        { name: 'Threefold-mac-arm64.zip', size: 290131065, browser_download_url: `${base}Threefold-mac-arm64.zip` },
+        { name: 'Threefold-mac-arm64.zip.sha256', size: 90, browser_download_url: `${base}Threefold-mac-arm64.zip.sha256` },
+      ],
+    }),
+  )
+})
+await new Promise((resolve) => feedServer.listen(0, '127.0.0.1', resolve))
+
 const packaged = process.env.THREEFOLD_APP
 const app = await electron.launch({
   ...(packaged ? { executablePath: packaged, args: [] } : { args: ['.'] }),
@@ -50,6 +75,7 @@ const app = await electron.launch({
     THREEFOLD_CLI_LATEST: JSON.stringify({ claude: '2.1.325', chatgpt: '0.169.0' }),
     FAKE_CLI_STATE: fakeState,
     THREEFOLD_SKILL_HOME: skillHome,
+    THREEFOLD_UPDATE_FEED: `http://127.0.0.1:${feedServer.address().port}/latest.json`,
   },
 })
 const page = await app.firstWindow()
@@ -544,6 +570,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.mode === 'chatgpt', null, { timeout: 20000 })
   await page.waitForSelector('.handoff-card:not(.writing)')
   await answered()
+  check('a chat that moved between providers is marked as a handoff inside Threefold', (await page.textContent('.handoff-card .handoff-kind')) === 'Handoff inside Threefold')
   const card = (await page.textContent('.handoff-card')) ?? ''
   check(
     'the new chat says where it came from, why, and what the summary cost',
@@ -596,7 +623,11 @@ try {
   await page.click('.handoff-button')
   const handoffMenu = (await page.textContent('.handoff-menu .menu')) ?? ''
   check('hand off lists the other providers and who bills the summary', /Gemini/.test(handoffMenu) && /Claude/.test(handoffMenu) && /billed by Google/.test(handoffMenu), handoffMenu)
-  await page.click('.handoff-menu .menu-item:has-text("Gemini")')
+  check(
+    'the menu keeps the two kinds of handoff apart',
+    /Inside Threefold · continue this chat in/.test(handoffMenu) && /From outside Threefold/.test(handoffMenu) && /Bring a chat in from another app/.test(handoffMenu),
+  )
+  await page.click('.handoff-menu .menu-item:has(strong:text-is("Gemini"))')
   await page.waitForFunction(() => document.documentElement.dataset.mode === 'gemini', null, { timeout: 20000 })
   await page.waitForSelector('.handoff-card:not(.writing)')
   const manualCard = (await page.textContent('.handoff-card')) ?? ''
@@ -611,7 +642,12 @@ try {
   await page.click('.side-btn:has-text("New chat")')
   await page.click('.link-btn')
   await page.waitForSelector('.handoff-modal')
-  check('the paste dialog names the skill', /threefolds/.test((await page.textContent('.handoff-modal')) ?? ''))
+  const pasteDialog = (await page.textContent('.handoff-modal')) ?? ''
+  check('the paste dialog names the skill', /threefolds/.test(pasteDialog))
+  check(
+    'the paste dialog says it is for chats from outside, and where the other kind lives',
+    (await page.textContent('.handoff-modal .handoff-kind')) === 'Handoff from outside Threefold' && /use Hand off at the top of that chat/.test(pasteDialog),
+  )
   check('nothing can be continued until a summary is pasted', await page.locator('.handoff-modal .btn.primary').isDisabled())
   await page.click('.handoff-modal .btn:has-text("Copy the prompt")')
   const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
@@ -623,6 +659,7 @@ try {
   await shot('20-handoff-paste')
   await page.click('.handoff-modal .btn.primary')
   await page.waitForSelector('.handoff-card')
+  check('a chat brought in from another app is marked as a handoff from outside', (await page.textContent('.handoff-card .handoff-kind')) === 'Handoff from outside Threefold')
   const pastedCard = (await page.textContent('.handoff-card')) ?? ''
   check(
     'a pasted handoff becomes a chat with its title and origin',
@@ -776,6 +813,8 @@ try {
   await page.click('.modal-nav .side-btn:has-text("Handoff skill")')
   const claudeRow = page.locator('.skill-row[data-target="claude-code"]')
   await claudeRow.waitFor()
+  const kinds = await page.locator('.handoff-kind-card .handoff-kind').allTextContents()
+  check('settings explain the two kinds of handoff side by side', kinds.join(' | ') === 'Handoff inside Threefold | Handoff from outside Threefold', kinds.join(' | '))
   const claudeRowText = (await claudeRow.textContent()) ?? ''
   check(
     'the skill tab shows where each coding tool stands',
@@ -819,6 +858,65 @@ try {
   check('the skill can be taken out again', !fs.existsSync(skillFile) && !fs.existsSync(path.dirname(skillFile)))
   await page.click('.modal-close')
 
+  // ---- updates: the check, the button and the dialog (nothing is installed here) ----
+  check('the app asked for the newest release by itself, and shows no update when there is none', feed.asked >= 1 && (await page.locator('.update-pill').count()) === 0, `${feed.asked} request(s)`)
+  check(
+    'the app menu has Check for Updates',
+    await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items[0].submenu.items.some((item) => item.label.startsWith('Check for Updates'))),
+  )
+  await page.click('.user-row')
+  await page.click('.modal-nav .side-btn:has-text("About")')
+  await page.waitForSelector('.update-settings')
+  const autoSwitch = page.locator('.update-settings .switch')
+  check('looking for updates is on, and says what it sends', (await autoSwitch.getAttribute('aria-checked')) === 'true' && /Nothing about you or your chats is sent/.test((await page.textContent('.update-settings')) ?? ''))
+  await autoSwitch.click()
+  await page.waitForFunction(() => document.querySelector('.update-settings .switch')?.getAttribute('aria-checked') === 'false')
+  check('it can be switched off', JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'settings.json'), 'utf8')).updates.auto === false)
+  await autoSwitch.click()
+  await page.waitForFunction(() => document.querySelector('.update-settings .switch')?.getAttribute('aria-checked') === 'true')
+  await page.click('.update-settings .btn:has-text("Check now")')
+  await page.waitForFunction(() => /is the newest version/.test(document.querySelector('.update-row')?.textContent ?? ''))
+  check('a check with nothing newer says so', new RegExp(`Threefold ${thisVersion.replace(/\./g, '\\.')} is the newest version`).test((await page.textContent('.update-row')) ?? ''))
+
+  feed.version = '99.0.0'
+  await page.click('.update-settings .btn:has-text("Check now")')
+  await page.waitForSelector('.update-modal')
+  const updateDialog = (await page.textContent('.update-modal')) ?? ''
+  check(
+    'a newer release opens the update dialog with both versions and the size',
+    /Threefold 99\.0\.0 is available/.test(updateDialog) && updateDialog.includes(`You have ${thisVersion}`) && /290 MB/.test(updateDialog) && /See what is new/.test(updateDialog),
+    updateDialog.slice(0, 120),
+  )
+  if (packaged) {
+    check(
+      'the installed app offers to update itself with one click, and says what will happen',
+      (await page.locator('.update-modal .btn.primary:has-text("Update and restart")').count()) === 1 && /checks the download against the checksum/.test(updateDialog) && /old copy goes to the Trash/.test(updateDialog),
+    )
+  } else {
+    check(
+      'a copy run from the source is sent to the download page instead',
+      /runs from the source code/.test(updateDialog) && (await page.locator('.update-modal .btn.primary:has-text("Open the download page")').count()) === 1,
+    )
+  }
+  await page.waitForSelector('.toast', { state: 'detached', timeout: 9000 })
+  await shot('26-update-dialog')
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.update-modal', { state: 'detached' })
+  check('the sidebar shows an update button while one is on offer', /Update to 99\.0\.0/.test((await page.textContent('.update-pill')) ?? ''))
+  await shot('27-update-button')
+  await page.click('.update-pill')
+  await page.waitForSelector('.update-modal')
+  check('the button opens the dialog again', true)
+  await page.keyboard.press('Escape')
+  feed.version = thisVersion
+  await page.click('.user-row')
+  await page.click('.modal-nav .side-btn:has-text("About")')
+  await page.click('.update-settings .btn:has-text("Update…")')
+  await page.keyboard.press('Escape')
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items[0].submenu.items.find((item) => item.label.startsWith('Check for Updates')).click())
+  await page.waitForSelector('.update-pill', { state: 'detached' })
+  check('the button goes away once the installed version is the newest again', true)
+
   // ---- dark theme ----
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.click('.side-btn:has-text("New chat")')
@@ -859,6 +957,7 @@ try {
   fs.rmSync(fakeDir, { recursive: true, force: true })
   fs.rmSync(projectDir, { recursive: true, force: true })
   fs.rmSync(skillHome, { recursive: true, force: true })
+  feedServer.close()
 }
 
 console.log(failures.length === 0 ? '\nAll checks passed.' : `\n${failures.length} check(s) failed.`)

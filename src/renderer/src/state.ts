@@ -24,6 +24,7 @@ import type {
   Usage,
 } from '@shared/types'
 import type { Artifact } from '@shared/artifacts'
+import type { UpdateState } from '@shared/update'
 import { DEFAULT_MODEL } from '@shared/pricing'
 import { planFallback, type FallbackPlan } from '@shared/fallback'
 import { MODE_NAME } from './lib/format'
@@ -104,7 +105,9 @@ interface State {
   spend: Record<Provider, SpendSummary> | null
   models: Record<Provider, ModelOption[]>
   artifact: Artifact | null
-  modal: 'settings' | 'onboarding' | 'handoff' | 'incoming' | 'subscription' | null
+  modal: 'settings' | 'onboarding' | 'handoff' | 'incoming' | 'subscription' | 'update' | null
+  /** What is known about a newer version of the app. */
+  update: UpdateState | null
   /** A handoff passed in from outside the app, waiting for the user to accept or discard it. */
   incoming: IncomingHandoff | null
   /** The subscription panel was opened to finish setup straight away. */
@@ -137,6 +140,11 @@ interface State {
    */
   checkIncoming(orPaste?: boolean): Promise<void>
   discardIncoming(): void
+  /** Asks GitHub now, and says what it found. */
+  checkForUpdates(): Promise<void>
+  openUpdate(): void
+  /** Downloads, checks and installs the update. The app closes and opens again when it is done. */
+  installUpdate(): Promise<void>
   /** Keep the open chat (or the next new one) on its provider even when credit runs low. */
   setNoFallback(on: boolean): Promise<void>
   openHandoffModal(): void
@@ -214,6 +222,7 @@ export const useApp = create<State>((set, get) => ({
   models: { claude: [], chatgpt: [], gemini: [] },
   artifact: null,
   modal: null,
+  update: null,
   incoming: null,
   subscriptionAuto: false,
   subscriptionThen: null,
@@ -222,7 +231,8 @@ export const useApp = create<State>((set, get) => ({
   composerSeed: null,
 
   async init() {
-    const [settings, keys, metas, projects, spend, claude, chatgpt, gemini] = await Promise.all([
+    const [update, settings, keys, metas, projects, spend, claude, chatgpt, gemini] = await Promise.all([
+      api.update.get(),
       api.settings.get(),
       api.keys.status(),
       api.conversations.list(),
@@ -242,7 +252,10 @@ export const useApp = create<State>((set, get) => ({
       mode: settings.lastProvider,
       models: { claude, chatgpt, gemini },
       modal: settings.onboarded ? null : 'onboarding',
+      // An update found while the window was loading has already been reported; keep it.
+      update: get().update ?? update,
     })
+    if (update.updatedFrom) get().notify(`Threefold was updated from ${update.updatedFrom} to ${update.current}.`)
     // A handoff may be what opened the app.
     await get().checkIncoming()
   },
@@ -429,6 +442,24 @@ export const useApp = create<State>((set, get) => ({
 
   discardIncoming() {
     set({ incoming: null, modal: null })
+  },
+
+  async checkForUpdates() {
+    const update = await api.update.check()
+    set({ update })
+    if (update.latest) set({ modal: 'update' })
+    else if (update.status === 'error') get().notify(update.error ?? 'Threefold could not look for an update.', 'error')
+    else if (update.checkedAt) get().notify(`Threefold ${update.current} is the newest version.`)
+    else get().notify('This copy of Threefold does not look for updates.')
+  },
+
+  openUpdate() {
+    if (get().update?.latest) set({ modal: 'update' })
+  },
+
+  async installUpdate() {
+    const result = await api.update.install()
+    if (!result.ok && result.error) get().notify(result.error, 'error')
   },
 
   async setNoFallback(on) {

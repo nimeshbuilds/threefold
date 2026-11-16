@@ -81,6 +81,11 @@ export class ChatService {
     this.running.get(conversationId)?.abort()
   }
 
+  /** True while a reply or a handoff summary is being written. */
+  busy(): boolean {
+    return this.running.size > 0
+  }
+
   stopAll(): void {
     for (const controller of this.running.values()) controller.abort()
   }

@@ -246,8 +246,42 @@
       </div>
     </section>
 
+    <section id="handoffs" aria-labelledby="handoffs-title">
+      <h2 id="handoffs-title">Two kinds of handoff</h2>
+      <p class="section-lede">
+        A handoff is a summary that lets a conversation carry on somewhere else, so you do not start again. Threefold
+        has two kinds. They look alike in the app, so each one is labelled.
+      </p>
+      <div class="paths kinds">
+        <article class="path">
+          <p class="path-tag">Handoff inside Threefold</p>
+          <h3>Between your providers</h3>
+          <p class="path-meta">A chat moves from one mode to another: Claude, ChatGPT, Gemini.</p>
+          <ul class="ticks">
+            <li><strong>How it starts.</strong> You click <strong>Hand off</strong> at the top of a chat. Or it happens by itself when a provider's credit runs low, if you switched automatic fallback on.</li>
+            <li><strong>Who writes the summary.</strong> The provider you move to, through its API. Threefold sends it the conversation so far.</li>
+            <li><strong>What it costs.</strong> One extra request, billed by that provider and shown in the chat.</li>
+            <li><strong>What you set up.</strong> Two connected providers. No skill.</li>
+          </ul>
+          <p class="small"><a href="#fallback">How it works</a></p>
+        </article>
+        <article class="path">
+          <p class="path-tag">Handoff from outside Threefold</p>
+          <h3>From the official apps</h3>
+          <p class="path-meta">A chat comes in from the Claude, ChatGPT or Gemini app, or from Claude Code, Codex or Gemini CLI.</p>
+          <ul class="ticks">
+            <li><strong>How it starts.</strong> You run the <code>threefolds</code> skill in the app you are leaving.</li>
+            <li><strong>Who writes the summary.</strong> The assistant you are leaving, on that app's own plan. Threefold never sees that conversation, only the summary.</li>
+            <li><strong>What it costs.</strong> Nothing in Threefold until you send a message. The summary then goes along as background.</li>
+            <li><strong>What you set up.</strong> The skill, once per app. Threefold shows what arrives and asks before it continues.</li>
+          </ul>
+          <p class="small"><a href="#handoff">How it works</a></p>
+        </article>
+      </div>
+    </section>
+
     <section id="fallback" aria-labelledby="fallback-title">
-      <h2 id="fallback-title">When one plan runs low, carry on with another</h2>
+      <h2 id="fallback-title">Inside Threefold: when one plan runs low, carry on with another</h2>
       <p class="section-lede">
         Turn on automatic fallback and Threefold watches each provider's monthly credit. When one is nearly used up,
         the chat moves to a provider that still has credit, and brings its history along.
@@ -312,7 +346,7 @@
         <article class="path">
           <p class="path-tag">Option A</p>
           <h3>Download the app</h3>
-          <p class="path-meta">Version 0.7.1 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
+          <p class="path-meta">Version 0.8.0 · Apple Silicon Macs (M1 or later) · macOS 13 or later</p>
 
           <div class="warn" role="note">
             <p><strong>Read this first: the app is not signed by Apple.</strong></p>
@@ -434,6 +468,24 @@
           <a href="https://github.com/nimeshbuilds/threefold">source</a> and the
           <a href="skills/threefolds/SKILL.md">skill's full text</a> are public. In a chat app that cannot run
           commands on your Mac, the same request gets you the link to this page.
+        </p>
+      </div>
+
+      <div class="then" id="updates">
+        <h3>After that, updates install with one click</h3>
+        <p>
+          Threefold tells you when a newer version is out: an <strong>Update</strong> button appears in the sidebar.
+          Click it, then <strong>Update and restart</strong>. Threefold downloads the new version from this project's
+          GitHub release, checks it against the checksum published with the release, checks that it is Threefold,
+          swaps itself and opens again. Your chats, settings and keys are kept, and the old copy goes to the Trash.
+        </p>
+        <p>
+          To find out, Threefold asks GitHub for the number of the newest release when it opens and a few times a
+          day. Nothing about you or your chats is sent, nothing is installed until you click, and you can switch the
+          check off under <strong>Settings → About</strong>. Like the app itself, an update is not signed by Apple;
+          macOS may ask once for your login password so the new version can read your saved keys. This needs version
+          0.8.0 or later: from an older version, download once more, or ask your assistant to
+          <code>/threefolds update Threefold</code>.
         </p>
       </div>
 
@@ -591,7 +643,7 @@
     </section>
 
     <section id="handoff" class="band cool" aria-labelledby="handoff-title">
-      <h2 id="handoff-title">Or bring one chat over in a minute, with the threefolds skill</h2>
+      <h2 id="handoff-title">From outside: bring one chat over in a minute, with the threefolds skill</h2>
       <p class="section-lede">
         An export takes a while and brings everything. When you only want to carry on with one conversation, ask the
         assistant you are leaving to write a handoff summary and pass it to Threefold. No export, no import.
@@ -702,7 +754,7 @@
       <div class="privacy-grid">
         <article>
           <h3>No middleman</h3>
-          <p>Requests go from your Mac straight to Anthropic, OpenAI and Google. There is no Threefold server, account or telemetry.</p>
+          <p>Requests go from your Mac straight to Anthropic, OpenAI and Google. There is no Threefold server, account or telemetry. The one other request asks GitHub whether a newer version exists, and you can switch it off.</p>
         </article>
         <article>
           <h3>Keys stay encrypted</h3>
@@ -719,7 +771,7 @@
     <section class="status" aria-labelledby="status-title">
       <h2 id="status-title">Where it stands</h2>
       <p>
-        Threefold is an early preview, built in public. Version 0.7.1 is available as a download for Apple Silicon
+        Threefold is an early preview, built in public. Version 0.8.0 is available as a download for Apple Silicon
         Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
         testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>

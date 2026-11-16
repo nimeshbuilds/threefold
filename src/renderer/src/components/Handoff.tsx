@@ -15,6 +15,20 @@ import { Popover } from './Popover'
 
 const api = window.threefold
 
+/**
+ * The two kinds of handoff, named the same way wherever one shows up.
+ * inside: a chat moves between providers here in Threefold; the provider it moves to writes the summary.
+ * outside: a chat comes in from another app; the assistant it leaves wrote the summary.
+ */
+export const HANDOFF_KIND = {
+  inside: 'Handoff inside Threefold',
+  outside: 'Handoff from outside Threefold',
+} as const
+
+function KindTag({ kind }: { kind: keyof typeof HANDOFF_KIND }) {
+  return <span className={`handoff-kind ${kind}`}>{HANDOFF_KIND[kind]}</span>
+}
+
 /** Where the next message will go. Recomputed only when something it depends on changes. */
 export function useFallbackPlan(): FallbackPlan {
   const settings = useApp((s) => s.settings)
@@ -60,6 +74,7 @@ export function HandoffWriting({ progress }: { progress: HandoffProgress }) {
         <Icon name="handoff" size={18} />
       </span>
       <div className="handoff-text">
+        <KindTag kind="inside" />
         <strong>Moving this chat to {MODE_NAME[progress.to]}</strong>
         <p>
           {progress.reason === 'credit' && `${MODE_NAME[progress.from]} credit is ${Math.round(progress.usedPct ?? 0)}% used. `}
@@ -98,6 +113,7 @@ export function HandoffCard({ handoff }: { handoff: Handoff }) {
         <Icon name="handoff" size={18} />
       </span>
       <div className="handoff-text">
+        <KindTag kind={handoff.source === 'fallback' || handoff.source === 'manual' ? 'inside' : 'outside'} />
         <strong>Continued from {from}</strong>
         <p>{detail}</p>
         <div className="handoff-actions">
@@ -135,6 +151,7 @@ export function HandoffMenu() {
   const keys = useApp((s) => s.keys)
   const defaults = useApp((s) => s.settings?.defaultModel)
   const handoffTo = useApp((s) => s.handoffTo)
+  const openHandoffModal = useApp((s) => s.openHandoffModal)
   const busy = useApp((s) => (s.conversation ? Boolean(s.streaming[s.conversation.id] || s.handoffs[s.conversation.id]) : false))
   if (!conversation || conversation.panel) return null
   const hasHistory = conversation.messages.length > 0 || Boolean(conversation.handoff)
@@ -152,7 +169,7 @@ export function HandoffMenu() {
     >
       {(close) => (
         <>
-          <div className="menu-label">Continue this chat in</div>
+          <div className="menu-label">Inside Threefold · continue this chat in</div>
           {others.map((provider) => (
             <button
               key={provider}
@@ -171,6 +188,19 @@ export function HandoffMenu() {
             </button>
           ))}
           <div className="menu-foot">A new chat opens there. This one stays as it is.</div>
+          <div className="menu-label">From outside Threefold</div>
+          <button
+            className="menu-item model-item"
+            onClick={() => {
+              openHandoffModal()
+              close()
+            }}
+          >
+            <span className="model-item-main">
+              <strong>Bring a chat in from another app…</strong>
+              <small>From the Claude, ChatGPT or Gemini app, with the {SKILL_NAME} skill</small>
+            </span>
+          </button>
         </>
       )}
     </Popover>
@@ -209,6 +239,7 @@ export function HandoffModal() {
         <button className="icon-btn modal-close" onClick={close} aria-label="Close">
           <Icon name="close" size={18} />
         </button>
+        <KindTag kind="outside" />
         <h2>Continue a chat from another app</h2>
         <p className="lead">
           In the official Claude, ChatGPT or Gemini app, open the chat you want to bring over and run the{' '}
@@ -236,7 +267,8 @@ export function HandoffModal() {
         </div>
         <p className="muted small">
           Nothing is sent until you write a message. The summary then goes to {API_NAME[mode]} with it as background and
-          is billed as input tokens, like any other text.
+          is billed as input tokens, like any other text. To move a chat between Claude, ChatGPT and Gemini here in
+          Threefold you need none of this: use <strong>Hand off</strong> at the top of that chat.
         </p>
       </div>
     </div>
@@ -284,6 +316,7 @@ export function IncomingHandoffModal() {
         <button className="icon-btn modal-close" onClick={close} aria-label="Decide later">
           <Icon name="close" size={18} />
         </button>
+        <KindTag kind="outside" />
         <h2>A handoff is waiting</h2>
         <p className="lead">
           {incoming.source === 'inbox'
@@ -426,7 +459,8 @@ export function FallbackSettings() {
             </label>
           </div>
           <p className="muted small">
-            To write the summary, the conversation so far is sent to the provider you switch to. That is one extra
+            This is a handoff inside Threefold, between your own providers. (Bringing a chat in from the official
+            apps is the other kind: see Settings → Handoff skill.) To write the summary, the conversation so far is sent to the provider you switch to. That is one extra
             request, billed by that provider and shown in the chat with its cost. Only providers that have a monthly credit set above, and credit to spare, are switched to. Reviewed
             chats and the Code tab never switch. A note above the message box tells you before it happens and lets you
             keep that chat where it is.

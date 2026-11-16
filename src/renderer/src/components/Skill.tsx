@@ -11,7 +11,7 @@ import type { Provider, SkillStatus, SkillTarget } from '@shared/types'
 import { SKILL_INSTALL_PROMPT, SKILL_NAME } from '@shared/handoff'
 import { MODE_NAME } from '../lib/format'
 import { useApp } from '../state'
-import { copyPrompt } from './Handoff'
+import { HANDOFF_KIND, copyPrompt } from './Handoff'
 import { Icon } from './Icon'
 
 const api = window.threefold
@@ -181,6 +181,26 @@ export function SkillTab() {
         code in it. Run it in any chat and the assistant writes a handoff summary of that chat. In a coding tool on this
         Mac it can then pass the handoff straight into Threefold, and install or update Threefold when you ask.
       </p>
+
+      <div className="handoff-kinds" aria-label="The two kinds of handoff">
+        <div className="handoff-kind-card">
+          <span className="handoff-kind inside">{HANDOFF_KIND.inside}</span>
+          <strong>Between Claude, ChatGPT and Gemini mode</strong>
+          <p>
+            Click <strong>Hand off</strong> at the top of a chat, or let automatic fallback do it when credit runs low
+            (Settings → Credits). The provider you move to writes the summary and bills you for it. No skill is needed.
+          </p>
+        </div>
+        <div className="handoff-kind-card">
+          <span className="handoff-kind outside">{HANDOFF_KIND.outside}</span>
+          <strong>From the official apps and coding tools, into Threefold</strong>
+          <p>
+            The assistant you are leaving writes the summary, on that app’s own plan, with the{' '}
+            <strong>{SKILL_NAME}</strong> skill. Threefold shows what arrived and asks before it continues. This page
+            sets that up.
+          </p>
+        </div>
+      </div>
 
       <div className="key-setup skill-group" data-provider="claude">
         <div className="key-setup-head">
