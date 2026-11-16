@@ -1176,3 +1176,30 @@ h4 {
 .kinds .small a {
   font-weight: 600;
 }
+
+/* ---------- the skill's steps, and pictures inside a box ---------- */
+
+.skill-steps {
+  margin-top: 36px;
+}
+
+.skill-steps .numbered {
+  margin-top: 16px;
+}
+
+.plain {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.small-lede {
+  margin-top: 10px;
+  font-size: 16.5px;
+}
+
+.window.in-box {
+  max-width: 560px;
+  margin: 22px 0 0;
+}

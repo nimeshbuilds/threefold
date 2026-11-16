@@ -36,7 +36,7 @@
       <a href="#fallback">Fallback</a>
       <a href="#code">Code</a>
       <a href="#start">Quick start</a>
-      <a href="#handoff">Handoff</a>
+      <a href="#handoffs">Handoff</a>
       <a href="https://github.com/nimeshbuilds/threefold">GitHub</a>
     </nav>
     <span class="status-pill">Early preview</span>
@@ -65,6 +65,8 @@
           <button role="tab" aria-selected="false" data-shot="gemini-reply" data-alt="Gemini mode: a cool blue-tinted theme with the Gemini spend meter in the sidebar">Gemini mode</button>
           <button role="tab" aria-selected="false" data-shot="research" data-alt="Deep research: a message tagged as deep research, answered with a structured report, its sources and its cost">Deep research</button>
           <button role="tab" aria-selected="false" data-shot="fallback" data-alt="Automatic fallback: a chat that moved from Claude to ChatGPT, with a card at the top saying why, what the handoff summary cost, and the summary itself">Fallback</button>
+          <button role="tab" aria-selected="false" data-shot="incoming" data-alt="A handoff from outside: Threefold shows a handoff that was passed in, who it says it is from and how it arrived, and asks which mode to continue in">Handoff</button>
+          <button role="tab" aria-selected="false" data-shot="update" data-alt="One-click update: a dialog names the new version, lists what will happen, and offers Update and restart; an Update button sits in the sidebar">Update</button>
         </div>
         <figure class="window">
           <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -487,6 +489,15 @@
           0.8.0 or later: from an older version, download once more, or ask your assistant to
           <code>/threefolds update Threefold</code>.
         </p>
+        <p>
+          When an update changes the <code>threefolds</code> skill, <strong>Settings → Handoff skill</strong> says
+          that an older copy is installed and offers <strong>Update</strong> for each tool. A copy that is newer than
+          the app's own is never replaced.
+        </p>
+        <figure class="window small in-box">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="screenshots/update.png" width="1280" height="840" loading="lazy" alt="The update dialog: Threefold 99.0.0 is available, the three steps it will take, and an Update and restart button; the sidebar shows an Update button">
+        </figure>
       </div>
 
       <div class="then" id="skill">
@@ -659,10 +670,31 @@
           <p>Open the conversation you want to move and type <code>/threefolds</code>, or ask for a handoff summary. The assistant writes one: goal, background, what was done, where things stand, what is next.</p>
         </li>
         <li>
-          <h3>Say yes, and it arrives</h3>
-          <p>A coding tool on your Mac sees that Threefold is installed and asks whether to pass the handoff in. In a chat app, copy the reply and choose <strong>File → Continue from a Handoff…</strong> in Threefold, which takes it from your clipboard; the link at the end of the reply does the same from the browser. Either way Threefold shows you what arrived and asks where to continue. If a tool can save the handoff but not open the app, Threefold notices the saved file by itself, or shows it the next time you open it.</p>
+          <h3>It arrives in Threefold</h3>
+          <p><strong>From a coding tool on your Mac</strong>, say yes when it asks whether to pass the handoff in. <strong>From a chat app</strong>, copy the reply and choose <strong>File → Continue from a Handoff…</strong> in Threefold. Either way Threefold shows you what arrived and asks where to continue.</p>
         </li>
       </ol>
+
+      <div class="then skill-steps">
+        <h3>What the skill does, in order</h3>
+        <ol class="numbered compact">
+          <li>
+            <p><strong>It looks for Threefold first,</strong> before it writes anything, with one command that answers "installed" or "not installed". A chat app cannot run that command on your Mac, so there the answer is "unknown".</p>
+          </li>
+          <li>
+            <p><strong>It writes the handoff:</strong> goal, background, what was done, where things stand, what is next, the details that must not be lost, and how you like to work. Passwords and keys are left out.</p>
+          </li>
+          <li>
+            <p><strong>It passes the handoff on,</strong> according to what step 1 found:</p>
+            <ul class="plain">
+              <li><strong>Installed.</strong> It asks whether to pass the handoff in. On your yes it saves the handoff in Threefold's inbox folder and opens Threefold. Where a tool is not allowed to open another app, as in Codex's sandbox, Threefold notices the saved file by itself.</li>
+              <li><strong>Not installed.</strong> It tells you how to carry the handoff over, and offers to install Threefold.</li>
+              <li><strong>Unknown.</strong> It tells you how to carry the handoff over: copy the reply, then <strong>File → Continue from a Handoff…</strong> in Threefold, or the link, or paste it into any other app. It says nothing about whether Threefold is installed.</li>
+            </ul>
+          </li>
+        </ol>
+        <p class="small">The skill may not say that Threefold is installed, or that it is not, unless it ran the check and saw the answer. And it never puts any part of a conversation into a link.</p>
+      </div>
 
       <div class="split handoff-arrive">
         <div>
@@ -675,9 +707,9 @@
           </p>
           <ul class="ticks">
             <li><strong>The link carries nothing.</strong> <code>threefold://handoff</code> only tells the app to look for a handoff that is already on your Mac. Text put into the link is ignored, and no other link does anything.</li>
-            <li><strong>Two places are looked at, no others.</strong> Threefold's own inbox folder, where the skill saves the file and which the app watches while it is open, and your clipboard when a link asks. Text that is not a Threefold handoff is left alone.</li>
+            <li><strong>Two places are looked at, no others.</strong> Threefold's own inbox folder, where the skill saves the file and which the app watches while it is open; and your clipboard, only when a link or you (File → Continue from a Handoff…) ask. Text that is not a Threefold handoff is left alone.</li>
             <li><strong>Files are checked.</strong> A file is taken only if it is a plain file that you own, with the expected name, under 1 MB and less than a day old. Links to other files are never followed.</li>
-            <li><strong>The sender is a claim.</strong> macOS does not tell an app who opened a link, so Threefold shows what the handoff says about itself and points out when the link and the summary disagree.</li>
+            <li><strong>The sender is a claim.</strong> macOS does not tell an app who opened a link, so Threefold shows what the handoff says about itself, in the link or in the saved file's name, and points out when that and the summary disagree.</li>
           </ul>
           <p class="small">Threefold recognises a handoff even when a chat app's Copy button has stripped its formatting, as ChatGPT's does. In Gemini the link in the reply leads to a Google search, not to this site, so use the menu there.</p>
         </div>
@@ -688,6 +720,10 @@
       </div>
 
       <h3 class="sub">Adding the skill to the chat apps</h3>
+      <p class="section-lede small-lede">
+        A chat app keeps skills in your account, so the skill is added there. However it was added, the last step is
+        the same: copy the assistant's reply, then choose <strong>File → Continue from a Handoff…</strong> in Threefold.
+      </p>
 
       <div class="import-grid">
         <article class="import-card ember">
@@ -737,8 +773,8 @@
           <pre><code></code></pre>
         </div>
         <p class="small" data-handoff-fallback>
-          The prompt is everything below the second <code>---</code> line in
-          <a href="skills/threefolds/SKILL.md">SKILL.md</a>.
+          The prompt is the part of <a href="skills/threefolds/SKILL.md">SKILL.md</a> from "Step 1" up to
+          "Installing Threefold".
         </p>
       </div>
       <p class="note">
@@ -772,8 +808,10 @@
       <h2 id="status-title">Where it stands</h2>
       <p>
         Threefold is an early preview, built in public. Version 0.8.2 is available as a download for Apple Silicon
-        Macs and as source. Its interface, cost tracking, importers and review engine are covered by automated tests;
-        testing against the live APIs is in progress. <strong>The download is not signed or notarized by Apple.</strong>
+        Macs and as source. Its interface, cost tracking, importers, review engine, handoffs and updater are covered
+        by automated tests. The <code>threefolds</code> skill has been run for real in Claude Code and Codex, and as a
+        pasted prompt in ChatGPT and Gemini; not yet in the Claude app or Gemini CLI. Testing against the live APIs is
+        in progress. <strong>The download is not signed or notarized by Apple.</strong>
       </p>
       <p class="hero-actions">
         <a class="button primary" href="#start">Quick start</a>
