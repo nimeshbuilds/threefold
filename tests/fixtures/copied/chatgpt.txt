@@ -1,0 +1,73 @@
+Threefold handoff
+
+Title: Shade-Tolerant Herbs for a North-Facing Balcony
+
+From: ChatGPT (GPT-6)
+
+Date: November 16, 2026
+
+Goal
+
+The user is planning a small herb garden on a north-facing balcony and wants recommendations for herbs that tolerate shade.
+
+Background
+
+The garden will be on a north-facing balcony.
+
+The garden is intended to be small.
+
+Shade tolerance is an important selection criterion.
+
+The user prefers concise answers.
+
+What has been done
+
+Three shade-tolerant herbs were recommended:
+
+Mint
+
+Parsley
+
+Chives
+
+Each recommendation included a brief explanation of its shade tolerance.
+
+Current state
+
+The latest recommendations were:
+
+Mint – Thrives in partial shade and tolerates low light.
+
+Parsley – Grows well in partial shade.
+
+Chives – Tolerate shade and grow well with limited sunlight.
+
+No planting plan, container recommendations, soil requirements, or watering schedule has been developed.
+
+Open questions and next steps
+
+None. The user's last gardening request was answered.
+
+Details to keep
+
+Location type: North-facing balcony.
+
+Project: Small herb garden.
+
+Recommended herbs: Mint, parsley, and chives.
+
+The user explicitly requested three herbs, one line each, and nothing more in the original gardening question.
+
+How to work with this user
+
+Be concise and direct.
+
+Respect exact formatting and length restrictions.
+
+Avoid unnecessary explanations, follow-up questions, and unsolicited advice.
+
+Use English.
+
+--- end of handoff ---
+
+Copy this message and paste it into the app you're moving to, or open https://nimeshbuilds.github.io/threefold/open/?from=chatgpt  to send it to Threefold.

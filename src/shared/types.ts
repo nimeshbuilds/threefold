@@ -543,9 +543,10 @@ export interface ThreefoldApi {
   handoff: {
     /**
      * Hands over the handoff that is waiting, once. Also looks in the inbox folder, so a
-     * handoff that was saved while the link could not be opened is still found.
+     * handoff that was saved while the link could not be opened is still found. With
+     * `asked`, when the user chose to continue from a handoff, the clipboard is looked at too.
      */
-    take(): Promise<IncomingHandoff | null>
+    take(asked?: boolean): Promise<IncomingHandoff | null>
     /** Called when a handoff arrives while the window is open. Fetch it with take(). */
     onIncoming(listener: () => void): () => void
   }

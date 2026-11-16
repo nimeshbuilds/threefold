@@ -83,9 +83,11 @@ After the "end of handoff" line, finish according to the result of step 1. NAME 
 2. When the file is saved, and not before, run `open "threefold://handoff?from=NAME"`. Do the two steps one after the other, never at the same time. If you work in a sandbox that refuses this command, ask to run it outside the sandbox when your tool lets you ask.
 3. Tell the user that Threefold is showing the handoff and is waiting for them to choose where to continue. If the file was saved but the `open` command failed, that is fine: say that the handoff is saved, that Threefold shows it by itself when it is open, and that otherwise it appears as soon as they open Threefold. If the file could not be saved, tell them to copy the handoff and paste it into Threefold under File > Continue from a Handoff.
 
-**Not installed.** Add one sentence. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. Add that Threefold is not on this Mac yet and that you can install it if they ask.
+**Not installed.** Add the closing line described below, and after it one more sentence: that Threefold is not on this Mac yet and that you can install it if they ask.
 
-**Unknown.** Add one sentence. It tells the user to copy this message, and then either to paste it into the app they are moving to, or to open https://nimeshbuilds.github.io/threefold/open/?from=NAME to send it to Threefold. Say nothing about whether Threefold is installed. One addition, only when you do run commands on the user's own Mac and were merely refused permission to run the check: say that you could not look, and that if Threefold is installed they can tell you so and you will pass the handoff in. If they then do, follow the steps under "Installed".
+**Unknown.** Add the closing line described below. Say nothing about whether Threefold is installed. One addition, only when you do run commands on the user's own Mac and were merely refused permission to run the check: say that you could not look, and that if Threefold is installed they can tell you so and you will pass the handoff in. If they then do, follow the steps under "Installed".
+
+The closing line tells the user three things, briefly: to copy this message; that in Threefold, File > Continue from a Handoff then picks it up from the clipboard, and that the page https://nimeshbuilds.github.io/threefold/open/?from=NAME does the same from a browser; and that in any other app they can paste it as their first message. Write the page's address out in full, as plain text, so that it can be read and copied even where it is not shown as a link.
 
 Use the commands and the link exactly as they are written here, changing only NAME. Never add anything else to them, and never put any part of the handoff or of the conversation into a link, a web address or a command. The handoff travels only as the text of your reply or as the saved file.
 
@@ -117,4 +119,4 @@ Limits that have no exceptions:
 - Never ask for, read or handle the user's API keys. Only the user enters them, in the app itself.
 - Download only from the two addresses above, and run nothing else that comes from the internet.
 
-<!-- threefolds skill, revision 6 -->
+<!-- threefolds skill, revision 7 -->

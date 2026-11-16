@@ -1,0 +1,48 @@
+Threefold handoff
+
+Title: Shade-Tolerant Herb Garden for North-Facing Balcony
+
+From: Gemini
+
+Date: November 16, 2026
+
+Goal
+
+The user is planning a small herb garden on a north-facing balcony and wants recommendations for herbs that can tolerate shaded conditions.
+
+Background
+
+The planting location is a small, north-facing balcony, which provides limited direct sunlight (partial to full shade).
+
+The user prefers concise, strictly formatted outputs without conversational filler or extra explanations.
+
+What has been done
+
+Recommended three shade-tolerant herbs (Mint, Parsley, and Chives) in a strict one-line-per-herb bulleted format as requested.
+
+Current state
+
+The initial request for three shade-tolerant herb recommendations has been answered in full:
+
+Markdown
+* **Mint:** Thrives in cool, shaded spots and grows vigorously without direct sun.
+* **Parsley:** Tolerates low light well while maintaining tender, flavorful leaves.
+* **Chives:** Adapts easily to partial or full shade and still produces mild, onion-flavored shoots.
+
+Open questions and next steps
+
+None. The user requested a handoff summary immediately following the initial recommendation. Potential next steps in the new session include container sizing, soil requirements, watering schedules, or companion planting for these three herbs.
+
+Details to keep
+
+Selected herbs: Mint, Parsley, Chives.
+
+Location constraint: North-facing balcony (shade/low light).
+
+How to work with this user
+
+Keep responses extremely concise, direct, and strictly adherent to formatting constraints (e.g., "one line each, and nothing more"). Avoid introductory greetings, filler, or unsolicited follow-up prose.
+
+--- end of handoff ---
+
+Copy this message, and then either paste it into the app you are moving to, or open https://nimeshbuilds.github.io/threefold/open/?from=gemini to send it to Threefold.

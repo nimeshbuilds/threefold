@@ -496,7 +496,7 @@ export function HandoffImportBlock() {
         </li>
         <li>
           In a coding tool on this Mac, say yes when it offers to open Threefold: the handoff arrives by itself.
-          Anywhere else, copy the summary, click the button below and paste it.
+          Anywhere else, copy the summary and click the button below: Threefold takes it from your clipboard.
         </li>
       </ol>
       <div className="key-row">

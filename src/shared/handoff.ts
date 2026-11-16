@@ -108,6 +108,51 @@ export interface ParsedHandoff {
   from?: string
 }
 
+/** The sections of a handoff, by their headings. */
+export const HANDOFF_SECTIONS = [
+  'Goal',
+  'Background',
+  'What has been done',
+  'Current state',
+  'Open questions and next steps',
+  'Details to keep',
+  'How to work with this user',
+]
+
+/**
+ * The first line of a handoff, as it may arrive. The chat apps' own Copy buttons
+ * put the reply on the clipboard as plain text, so the "#" is often gone and
+ * the line reads just "Threefold handoff".
+ */
+const START = /(^|\n)[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*|__)?Threefold handoff(?:\*\*|__)?[ \t]*(?=\n|$)/gi
+/** The last line, with whatever dashes survived the copy. */
+const END = /(?:^|\n)[ \t]*[-–—]{1,3}[ \t]*end of handoff\b/i
+
+/** Where the handoff starts in a text: after its first line. The skill's own template, when it was copied along, is passed over. */
+function findStart(text: string): { at: number; after: number } | null {
+  START.lastIndex = 0
+  let fallback: { at: number; after: number } | null = null
+  for (let match = START.exec(text); match; match = START.exec(text)) {
+    const found = { at: match.index + match[1]!.length, after: match.index + match[0].length }
+    // The template's first lines hold its placeholders, not a conversation's.
+    if (!/a short title for this conversation/i.test(text.slice(found.after, found.after + 200))) return found
+    fallback ??= found
+  }
+  return fallback
+}
+
+/** True for text that holds a Threefold handoff. This is what the app looks for in its inbox and on the clipboard. */
+export function isHandoff(text: unknown): boolean {
+  return typeof text === 'string' && findStart(text.replace(/\r\n/g, '\n')) !== null
+}
+
+/** Puts the "##" back in front of the section names of a handoff that was copied as plain text. */
+function restoreSections(text: string): string {
+  if (/\n##[ \t]/.test(text)) return text
+  const names = HANDOFF_SECTIONS.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  return text.replace(new RegExp(`\\n[ \\t]*(${names})[ \\t]*(?=\\n|$)`, 'gi'), '\n## $1')
+}
+
 function field(text: string, name: string): string | undefined {
   // Only the lines above the first section are the header.
   const header = text.split(/\n##\s/)[0] ?? ''
@@ -118,18 +163,19 @@ function field(text: string, name: string): string | undefined {
 }
 
 /**
- * Takes whatever the user pasted and finds the handoff in it. Text before the
- * heading and after the end line is dropped. Text with no heading at all is
- * accepted whole, so a summary written without the skill still works.
+ * Takes whatever the user pasted or copied and finds the handoff in it. Text
+ * before the first line and after the end line is dropped, and a handoff that
+ * was copied as plain text gets its heading marks back. Text with no first
+ * line at all is accepted whole, so a summary written without the skill still works.
  */
 export function parseHandoff(input: string): ParsedHandoff | null {
   let text = String(input ?? '').replace(/\r\n/g, '\n').trim()
   if (!text) return null
-  const start = text.toLowerCase().indexOf(HANDOFF_HEADING.toLowerCase())
-  if (start !== -1) {
-    text = text.slice(start)
-    const end = text.toLowerCase().indexOf('--- end of handoff')
-    if (end !== -1) text = text.slice(0, end)
+  const start = findStart(text)
+  if (start) {
+    const rest = text.slice(start.after)
+    const end = rest.match(END)
+    text = restoreSections(`${HANDOFF_HEADING}${end ? rest.slice(0, end.index) : rest}`)
   }
   // A code fence the assistant wrapped around the handoff.
   text = text.replace(/\n`{3,}[ \t]*$/, '').trim()

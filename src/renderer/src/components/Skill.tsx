@@ -288,8 +288,9 @@ export function SkillTab() {
           or shows it the next time you open it.
         </li>
         <li>
-          <strong>From a chat app in the browser.</strong> The reply ends with a link. Copy the reply, click the link,
-          and Threefold picks the handoff up from your clipboard.
+          <strong>From a chat app in the browser.</strong> Copy the reply, then choose File → Continue from a
+          Handoff here: Threefold picks the handoff up from your clipboard. The link at the end of the reply does the
+          same from the browser.
         </li>
         <li>
           <strong>Updating Threefold.</strong> Ask a coding tool that has the skill to “update Threefold”. It tells

@@ -20,6 +20,7 @@ import {
   HANDOFF_OPEN_URL,
   HANDOFF_PROMPT,
   HANDOFF_PROMPT_INTRO,
+  HANDOFF_SECTIONS,
   HANDOFF_WRITER_OPENING,
   HANDOFF_WRITER_SYSTEM,
   HANDOFF_WRITE_HEADING,
@@ -31,8 +32,10 @@ import {
   handoffSystemNote,
   handoffTranscript,
   handoffWriterPrompt,
+  isHandoff,
   parseHandoff,
   parseHandoffLink,
+  providerFromName,
   skillRevision,
 } from '@shared/handoff'
 import { INBOX_FILE, senderFromFileName } from '../src/main/incoming'
@@ -130,6 +133,58 @@ Plan four days in Lisbon in March.
 Title: this line is content, not the header
 
 ${HANDOFF_END}`
+
+describe('a handoff as the chat apps really hand it over', () => {
+  // Both files are what came out of the real apps on 16 November 2026: ChatGPT's own Copy
+  // button, and the text of Gemini's reply. Neither has the "#" the handoff was written with.
+  const copied = (name: string): string => fs.readFileSync(path.join(root, 'tests/fixtures/copied', name), 'utf8')
+
+  it('is recognised without its heading marks, as ChatGPT copies it', () => {
+    const text = copied('chatgpt.txt')
+    expect(text.startsWith('Threefold handoff\n')).toBe(true)
+    expect(text).not.toContain('#')
+    expect(isHandoff(text)).toBe(true)
+    const parsed = parseHandoff(text)
+    expect(parsed?.title).toBe('Shade-Tolerant Herbs for a North-Facing Balcony')
+    expect(parsed?.from).toBe('ChatGPT (GPT-6)')
+    expect(providerFromName(parsed?.from)).toBe('chatgpt')
+    // The first line and the sections get their marks back; the closing sentence and its link are left out.
+    expect(parsed?.summary.startsWith(`${HANDOFF_HEADING}\n\nTitle: Shade-Tolerant Herbs`)).toBe(true)
+    for (const section of HANDOFF_SECTIONS) expect(parsed?.summary).toContain(`\n## ${section}\n`)
+    expect(parsed?.summary).toMatch(/Use English\.$/)
+    expect(parsed?.summary).not.toMatch(/Copy this message|nimeshbuilds|end of handoff/)
+  })
+
+  it('is recognised as Gemini shows it', () => {
+    const parsed = parseHandoff(copied('gemini.txt'))
+    expect(parsed?.title).toBe('Shade-Tolerant Herb Garden for North-Facing Balcony')
+    expect(parsed?.from).toBe('Gemini')
+    expect(providerFromName(parsed?.from)).toBe('gemini')
+    for (const section of HANDOFF_SECTIONS) expect(parsed?.summary).toContain(`\n## ${section}\n`)
+    expect(parsed?.summary).not.toMatch(/Copy this message|nimeshbuilds/)
+  })
+
+  it('passes over the skill’s own template when the whole chat was copied along', () => {
+    const whole = `${HANDOFF_PROMPT}\n\n${copied('chatgpt.txt')}`
+    expect(parseHandoff(whole)?.title).toBe('Shade-Tolerant Herbs for a North-Facing Balcony')
+    // The template alone is still read, with its placeholders treated as no title at all.
+    expect(parseHandoff(HANDOFF_PROMPT)?.title).toBeUndefined()
+  })
+
+  it('does not take ordinary text for a handoff', () => {
+    for (const text of ['', 'Notes on the Threefold handoff feature, which is nice.', 'threefold handoffs are great', 'A line\nabout Threefold handoff things\nand more']) {
+      expect(isHandoff(text), text).toBe(false)
+    }
+    for (const text of ['# Threefold handoff\n\n## Goal\nx', 'Threefold handoff\n\nGoal\nx', 'Sure:\n\n**Threefold handoff**\n\nTitle: x', '## threefold handoff\r\n\r\nGoal']) {
+      expect(isHandoff(text), text).toBe(true)
+    }
+  })
+
+  it('keeps a handoff that already has its marks exactly as it was', () => {
+    const marked = `${HANDOFF_HEADING}\n\n- **Title:** Kept\n\n## Goal\nOne.\n\n## Details to keep\nGoal\nis a word here, not a heading.\n\n${HANDOFF_END}`
+    expect(parseHandoff(marked)?.summary).toBe(marked.replace(`\n\n${HANDOFF_END}`, ''))
+  })
+})
 
 describe('the threefolds skill', () => {
   const skill = fs.readFileSync(path.join(root, 'skills', SKILL_NAME, 'SKILL.md'), 'utf8')
@@ -232,10 +287,15 @@ describe('the threefolds skill', () => {
       expect(delivery).toContain(`\`${sender}\``)
       expect(parseHandoffLink(`threefold://handoff?from=${sender}`)).toEqual({ sender })
     }
-    // Not installed, and unknown: the web page, which is the one the app publishes. Only the first may offer to install.
+    // Not installed, and unknown: one closing line for both. Only the first may offer to install.
     const absent = delivery.slice(delivery.indexOf('**Not installed.**'), delivery.indexOf('**Unknown.**'))
-    const unknown = delivery.slice(delivery.indexOf('**Unknown.**'), delivery.indexOf('Use the commands and the link'))
-    for (const part of [absent, unknown]) expect(part).toContain(`${HANDOFF_OPEN_URL}?from=NAME`)
+    const unknown = delivery.slice(delivery.indexOf('**Unknown.**'), delivery.indexOf('The closing line tells the user'))
+    const closing = delivery.slice(delivery.indexOf('The closing line tells the user'), delivery.indexOf('Use the commands and the link'))
+    for (const part of [absent, unknown]) expect(part).toMatch(/Add the closing line described below/)
+    // It names Threefold's own menu first: that works whatever a chat app does to a link (Gemini turns it into a search).
+    expect(closing).toMatch(/in Threefold, File > Continue from a Handoff then picks it up from the clipboard/)
+    expect(closing).toContain(`${HANDOFF_OPEN_URL}?from=NAME`)
+    expect(closing).toMatch(/Write the page's address out in full, as plain text/)
     expect(absent).toMatch(/not on this Mac yet and that you can install it if they ask/)
     expect(unknown).toMatch(/Say nothing about whether Threefold is installed/)
     expect(unknown).not.toMatch(/install it/)
@@ -246,7 +306,7 @@ describe('the threefolds skill', () => {
   })
 
   it('carries a revision number, so an installed copy can be told from an older or a newer one', () => {
-    expect(skillRevision(SKILL_FILE)).toBeGreaterThanOrEqual(6)
+    expect(skillRevision(SKILL_FILE)).toBeGreaterThanOrEqual(7)
     expect(skillRevision('---\nname: threefolds\n---\nAn early copy with no number.')).toBe(0)
     expect(skillRevision('text\n<!-- threefolds skill, revision 12 -->\n')).toBe(12)
     // The number sits in the part about installing, so neither the pasted prompt nor the app's own writer carries it.

@@ -640,6 +640,8 @@ try {
 
   // ---- continuing a chat from another app: paste a handoff written by the threefolds skill ----
   await page.click('.side-btn:has-text("New chat")')
+  // Asking to continue from a handoff looks at the clipboard, so it must hold something known.
+  await app.evaluate(({ clipboard }) => clipboard.writeText('nothing to see'))
   await page.click('.link-btn')
   await page.waitForSelector('.handoff-modal')
   const pasteDialog = (await page.textContent('.handoff-modal')) ?? ''
@@ -795,6 +797,29 @@ try {
   )
   await page.click('.modal-close')
 
+  // ---- a reply copied in a chat app, then File → Continue from a Handoff: no pasting, no link ----
+  // This is what ChatGPT's own Copy button really puts on the clipboard: plain text, without the "#".
+  await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), fs.readFileSync(path.resolve('tests/fixtures/copied/chatgpt.txt'), 'utf8'))
+  await chooseFromMenu('Continue from a Handoff')
+  await page.waitForSelector('.incoming-modal')
+  const copiedText = (await page.textContent('.incoming-modal')) ?? ''
+  check(
+    'a reply copied from ChatGPT is picked up from the clipboard, although it lost its heading marks',
+    /From your clipboard/.test(copiedText) && /Shade-Tolerant Herbs for a North-Facing Balcony/.test(copiedText) && /summary written by ChatGPT \(GPT-6\)/.test(copiedText),
+    copiedText.slice(60, 260),
+  )
+  check('it is routed to ChatGPT mode by who wrote it', (await page.textContent('.incoming-pick .seg button.active')) === 'ChatGPT')
+  await page.click('.incoming-modal .btn.primary')
+  await page.waitForSelector('.handoff-card')
+  await page.click('.handoff-actions button:has-text("Read the summary")')
+  const restored = await page.locator('.handoff-summary h2').allTextContents()
+  check(
+    'the copied handoff becomes a ChatGPT chat with its sections restored and the closing sentence left out',
+    (await page.getAttribute('html', 'data-mode')) === 'chatgpt' && restored.includes('Goal') && restored.includes('How to work with this user') && !/Copy this message/.test((await page.textContent('.handoff-summary')) ?? ''),
+    restored.join(' | '),
+  )
+  await app.evaluate(({ clipboard }) => clipboard.writeText('nothing to see'))
+
   // ---- a handoff that was saved but never announced (a sandbox may refuse to open links) ----
   fs.writeFileSync(
     path.join(inbox, 'handoff-20261116-090000.md'),
@@ -947,7 +972,7 @@ try {
 
   // ---- persistence ----
   const saved = JSON.parse(fs.readFileSync(path.join(dataDir, 'data', 'conversations-index.json'), 'utf8'))
-  check('conversations are saved to disk', saved.length === 12, `${saved.length} saved`)
+  check('conversations are saved to disk', saved.length === 13, `${saved.length} saved`)
   const ledger = fs.readFileSync(path.join(dataDir, 'data', 'ledger.jsonl'), 'utf8').trim().split('\n')
   check('every request is written to the spend ledger', ledger.length === 22, `${ledger.length} entries`)
   const coding = ledger.map((line) => JSON.parse(line)).filter((entry) => entry.kind === 'code')

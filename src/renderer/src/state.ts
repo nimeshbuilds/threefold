@@ -427,7 +427,8 @@ export const useApp = create<State>((set, get) => ({
   async checkIncoming(orPaste = false) {
     // During the first-run wizard a handoff stays where it is until the wizard is done.
     if (get().modal === 'onboarding') return
-    const fresh = await api.handoff.take()
+    // Asked for by the user: a handoff they copied is taken straight from the clipboard.
+    const fresh = await api.handoff.take(orPaste)
     if (fresh && fresh.source !== 'none') {
       set({ incoming: fresh, modal: 'incoming' })
     } else if (get().incoming) {

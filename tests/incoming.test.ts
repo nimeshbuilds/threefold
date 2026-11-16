@@ -372,6 +372,29 @@ describe('receiving a handoff', () => {
     expect(incoming.take()).toMatchObject({ source: 'none' })
   })
 
+  it('takes a copied handoff from the clipboard when the user asks to continue from one, and only then', async () => {
+    // What ChatGPT's own Copy button really puts on the clipboard: plain text, no "#".
+    const copied = fs.readFileSync(path.resolve(__dirname, 'fixtures/copied/chatgpt.txt'), 'utf8')
+    const { incoming, dir, reads } = setup(copied)
+    // Nobody asked: the clipboard is not read.
+    expect(incoming.take()).toBeNull()
+    expect(reads).toHaveLength(0)
+    // The user chose "Continue from a Handoff".
+    expect(await incoming.takeOrCopied()).toMatchObject({
+      source: 'clipboard',
+      sender: undefined,
+      title: 'Shade-Tolerant Herbs for a North-Facing Balcony',
+      from: 'ChatGPT (GPT-6)',
+      fromProvider: 'chatgpt',
+    })
+    expect(reads).toHaveLength(1)
+    // A file that is waiting still comes first.
+    fs.writeFileSync(path.join(dir, 'handoff-20261116-101500-claude.md'), HANDOFF)
+    expect(await incoming.takeOrCopied()).toMatchObject({ source: 'inbox', sender: 'claude' })
+    // And a clipboard without a handoff gives nothing.
+    expect(await setup('just some notes').incoming.takeOrCopied()).toBeNull()
+  })
+
   it('finds a handoff that was saved while the link could not be opened, without reading the clipboard', () => {
     const { incoming, dir, reads } = setup(HANDOFF)
     expect(incoming.take()).toBeNull()

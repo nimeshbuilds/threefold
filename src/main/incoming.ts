@@ -19,7 +19,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { HANDOFF_HEADING, parseHandoff, parseHandoffLink, providerFromName } from '@shared/handoff'
+import { isHandoff, parseHandoff, parseHandoffLink, providerFromName } from '@shared/handoff'
 import { isProvider, type IncomingHandoff, type Provider } from '@shared/types'
 
 /** handoff-<letters, digits, dots, dashes>.md and nothing else. */
@@ -142,7 +142,7 @@ export function takeFileFromInbox(dir: string, now = Date.now()): { text: string
   for (const { file } of waiting) {
     if (found === null) {
       const text = readPlainFile(file)
-      if (text !== null && text.toLowerCase().includes(HANDOFF_HEADING.toLowerCase())) found = { text, sender: senderFromFileName(path.basename(file)) }
+      if (text !== null && isHandoff(text)) found = { text, sender: senderFromFileName(path.basename(file)) }
     }
     remove(file)
   }
@@ -151,8 +151,8 @@ export function takeFileFromInbox(dir: string, now = Date.now()): { text: string
 
 /** Turns found text into what the window shows. Null when the text is not a handoff. */
 export function describeIncoming(text: string, source: 'inbox' | 'clipboard', sender?: Provider): IncomingHandoff | null {
-  // Outside the app a handoff must carry its heading: unmarked text is never picked up.
-  if (!text.toLowerCase().includes(HANDOFF_HEADING.toLowerCase())) return null
+  // Outside the app a handoff must carry its first line: unmarked text is never picked up.
+  if (!isHandoff(text)) return null
   const parsed = parseHandoff(text)
   if (!parsed) return null
   return {
@@ -245,6 +245,15 @@ export class IncomingHandoffs {
     const waiting = this.pending ?? this.fromInbox()
     this.pending = null
     return waiting
+  }
+
+  /**
+   * The same when the user asked to continue from a handoff (the File menu, or
+   * the link under the message box): the clipboard is looked at too, so a
+   * handoff they copied needs no pasting.
+   */
+  async takeOrCopied(): Promise<IncomingHandoff | null> {
+    return this.take() ?? (await this.fromClipboard())
   }
 
   private fromInbox(sender?: Provider): IncomingHandoff | null {

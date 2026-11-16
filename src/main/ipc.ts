@@ -235,7 +235,7 @@ export function registerIpc(deps: IpcDeps): void {
 
   // ---------- handoffs from outside, and the skill that sends them ----------
 
-  handle('handoff:take', () => incoming.take())
+  handle('handoff:take', (asked?: boolean) => (asked === true ? incoming.takeOrCopied() : incoming.take()))
 
   const notTarget = { ok: false, error: 'Unknown tool.' }
   handle('skill:status', () => skillStatuses())
